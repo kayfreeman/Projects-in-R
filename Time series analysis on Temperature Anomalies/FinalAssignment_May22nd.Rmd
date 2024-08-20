@@ -1,0 +1,779 @@
+---
+title: "MATH 1318 - TIME SERIES ANALYSIS - ASSIGNMENT - Final Project"
+author: "Adeyinka K. Freeman (S3960988)"
+Due date: "May 23, 2024"
+output:
+  html_document:
+    toc: true
+  word_document:
+    toc: true
+  pdf_document:
+    latex_engine: lualatex
+    toc: true
+subtitle: "Time Series Analysis of  yearly Global Land Temperature Anomalies in Degrees
+  Celsius against the base period 1901-2000"
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+# Do not change these settings!
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+rm(list=ls())
+```
+
+## **1.0 BACKGROUND**
+Time series analysis is a key tool useful in analyzing and forecasting trends, patterns and anomalies in dataset over time. In this assignment, we will be analyzing the year Global Land Temperature Anomalies dataset. The dataset provides insight into temperature variations for the period of 1901-2000. it spans from the year 1850 to 2023 and is sourced from the NOAA National Centers for Environmental Information.
+
+## **1.0.1 Objective**
+The primary objective of this study is to perform a comprehensive time series analysis of the Global Land Temperature Anomalies dataset. We also intend to achieve the following:
+- Conduct descriptive analysis to understand the overall trends and patterns in the temperature anomalies data.
+- Propose and evaluate a set of possible ARIMA(p, d, q) models using various model specification tools.
+- Identify the best model using goodness-of-fit metrics (AIC, BIC, MSE, etc).
+
+## **1.0.2 Programming language to be used**
+The Assignment will be written in R programming language with descriptive analysis and diagnostic assessments intersperse in the Rmarkdown template used.
+
+## **1.0.3 Loading required Libraries for Time series**
+```{r}
+# Load the necessary libraries required for the assignment.
+
+library(tseries) # Time series analysis.
+library(readr) # Data import and parsing.
+library(ggplot2) # Data visualization and chart creation.
+
+library(dplyr) # data manipulation and transformation
+library(forecast) # Time series forecasting.
+library(TSA) # Time series analysis and modeling.
+library(expsmooth) # Exponential smoothing for time series.
+library(lmtest) # Linear regression model testing.
+
+```
+
+## **1.1 DATA PROPROCESSING AND DESCRIPTIVE ANALYSIS**
+The Global Land Temperature Anomalies dataset contains yearly temperature anomalies measured in degrees Celsius relative to the base period of 1901-2000. The dataset covers a time span from 1850 to 2023, providing a comprehensive historical record of global land temperature variations.
+
+## **1.1.1 Data import and review**
+```{r}
+# Getting working directory for the analysis
+getwd()
+
+# Reading the dataset provided make provision for the presence of header in the CSV file
+assignment2Data2024 <- read.csv("~/RMIT classes/Time Series/Assignment1/assignment2Data2024.csv", header = TRUE)
+
+# Glimpse columns
+glimpse (assignment2Data2024)
+
+```
+The "assignment2Data2024" dataset consists of two columns: "Year" and "Anomaly." The "Year" column covers the years from 1850 to 2023, providing a comprehensive historical record. On the other hand, the "Anomaly" column represents the yearly Global Land Temperature Anomalies measured in degrees Celsius. These anomalies are calculated against the base period of 1901-2000, indicating deviations from the average temperatures during that time frame.
+
+## **1.1.2 Data Preprocessing**
+```{r}
+
+# Check the class of the 'assignment2Data2024' object
+class(assignment2Data2024)
+
+# Explore the structure of the 'assignment2Data2024' object
+str(assignment2Data2024)
+
+# Display the first few rows of the 'assignment2Data2024' object
+head(assignment2Data2024)
+
+# Display the last few rows of the 'assignment2Data2024' object
+tail(assignment2Data2024)
+
+#checking out the summary of our dataset
+summary(assignment2Data2024)
+
+```
+
+The temperature anomalies in the dataset range from negative values, indicating cooler-than-average temperatures, to positive values, indicating warmer-than-average temperatures. This dataset is intended for time series analysis, which will involve examining trends, patterns, and forecasting of global land temperature anomalies over the years.
+
+
+## **1.1.3 Viewing, inspecting and Converting the Dataset to Time series**
+```{r convert to time series object after determining frequency}
+
+# Convert the dataset into a time series object using the ts() function
+ts_assignment2Data2024 <- ts(assignment2Data2024$Anomaly, start = 1850, end = 2023, frequency = 1)
+
+# Check the structure of the time series object
+str(ts_assignment2Data2024)
+
+# class of the converted data
+class(ts_assignment2Data2024)
+
+# Check the range of the resulting time series
+range(ts_assignment2Data2024)
+
+# Check the summary of the resulting time series
+summary(ts_assignment2Data2024)
+
+```
+The time series objects are organized as follows:
+
+- 'assignment2Data2024_ts' has observation with a range from -0.44 to 0.91,
+- Minimum value of the range is -0.44000, 
+- The 1st Quartile is -0.12750,  
+- The Median of the series is 0.00000,  
+- The Mean of the time series is 0.06218, 
+- The 3rd Quartile is 0.23000, 
+- The maximum value of the range is 0.91000,
+
+The summary information provided is valuable for understanding the characteristics of each time series, including the range of values and measures of central tendency. It can assist in further analysis and modeling of the data, particularly in the context of time series forecasting."
+
+## **1.2 DATA VISUALIZATION**
+
+## **1.2.1 Data Visualization - Time series Plot**
+```{r time series plot}
+# Create a time series plot and add axis labels
+
+plot(ts_assignment2Data2024, ylab = 'Anomaly', xlab = 'Year', type ='o', main = "Fig 1: Time series Plot of Global Land Temp. Anomalies", col="blue")
+
+```
+
+Visual inspection of the plot above shows:- 
+
+Trend Analysis -: The time series plot reveals a progressively upward and positive trend from 1850 to 2023. There were however an observable downward trend between 1877 & 1910 and another brief downward trend between 1940 & 1950. These negative downward trend needs further investigation as it may be as a result of natural climate variabilities or human activities such as the Industrial Revolution which though started in the late 18th century, its effects on global temperature anomalies became more pronounced in the late 19th and early 20th centuries.
+
+Seasonality -: Despite apparent mid swings year on year, we can observe no seasonal pattern over the timeframe considered (1850 - 2023)
+
+Changing variance -: There are observable change in variance observed in our series. 
+
+Behavior - The plot shows Moving Average (MA) characteristics. We would need to investigate to confirm the presence of any Autoregressive behavior in our data.
+
+Change Point - The plot has observable change point
+
+## **1.2.2 Data Visualization - Scatter and lagged Scatter Plot**
+```{r}
+# Create a scatter plot of the time series data
+plot(ts_assignment2Data2024, type = "p", pch = 16, col = "blue",
+     main = "Fig 2. Scatter Plot of Global Temp Anomalies (1850 - 2023)",
+     xlab = "Year", ylab = "Anomaly (Degrees Celsius)")
+
+# Create a Lagged scatter plot of the time series data to show relationship between points
+par(mfrow=c(1,1))
+plot(y=ts_assignment2Data2024, x=zlag(ts_assignment2Data2024), ylab='Anomaly (Degrees Celsius)', xlab='Year', 
+     main = "Fig 3. Lagged Scatter Plot of Global Temp Anomalies (1850 - 2023)")
+```
+
+The Scatter Plot: Shows individual data points without any connection between them. This provides a visual representation of the distribution of the temperature anomalies over time.
+
+Lagged Scatter Plot: Shows This plot connects each data point with its lagged counterpart, where each point represents the relationship between the temperature anomaly in a given year and its lagged value (e.g., temperature anomaly in the previous year). 
+
+Visually inspecting both scatter plots above, we can see that the data points exhibit a discernible linear trend, they form an upward-sloping line from left to right. This observation indicates a positive correlation between the two variables under consideration.
+
+## **1.2.3 Correlation Test of Scatter Plot**
+```{r find correlation in this scatter plot}
+# Read the data into y
+y <- ts_assignment2Data2024
+
+# Generate the first lag of the series
+x <- zlag(ts_assignment2Data2024)
+
+# Create an index to exclude the first NA value in x if applicable
+index <- 2:length(x)
+
+# Calculate the correlation between numerical values in x and y
+correlation <- cor(y[index], x[index])
+
+print(correlation)
+```
+
+The result 0.9399931 suggests that the correlation coefficient between the variables, y and x has a strong linear relationship between the original time series and its lagged version. 
+
+
+## **1.3 STATIONARITY TEST AND VALIDATION**
+## **1.3.1. Breusch-Pagan test for heteroscedasticity**
+```{r}
+# Performing the Breusch-Pagan test for heteroscedasticity
+anom <- 1:length(ts_assignment2Data2024)
+
+# Fit a linear regression model with an intercept and the "anom" variable
+model <- lm(ts_assignment2Data2024 ~ anom)
+
+# Perform the Breusch-Pagan test for heteroscedasticity
+bp_test <- bptest(model)
+
+# Print the test results
+print(bp_test)
+
+```
+
+The Breusch-Pagan test which is used to test for heteroscedasticity shows that our p-value of 0.7319 is greater than the typical significance level of 0.05. This indicates that the assumptions of constant variance of errors (homoscedasticity) in the regression model are not violated. Hence, It shows the consistency in the variability of our data. 
+
+## **1.3.2. Data Visualization - ACF Plot**
+```{r Create the ACF plot for finding the frequency}
+# Plot the ACF and PACF Plot to check for stationarity
+par(mfrow=c(1,1))
+acf(ts_assignment2Data2024, main = "Fig 4. Autocorrelation Function (ACF)")
+pacf(ts_assignment2Data2024, main = "Fig 5. Partial Autocorrelation Function (PACF)")
+
+```
+
+Autocorrelation Function (ACF): The bars in the ACF plot shows all significant lags are over the horizontal dash confidence line ("blue"). It also shows a slow decay signifying a moving average process. This suggests a strong autocorrelation pattern across multiple lags. It also suggests that past values of the time series are good predictors of future values 
+
+Partial Autocorrelation (PACF): We can see that the first and third lags are above the confidence line. The significant spike at the first lag indicates a strong correlation between the series and its first lagged value. This suggests the presence of autoregressive behavior. There is also an observable significant spike at the third lag, after a quick dampening from the first lag. The quick dampening after the third lag is a behavior consistent with autoregressive process.
+
+
+## **1.3.3. Augmented Dickey-Fuller (ADF) Test**
+```{r Augmented Dickey-Fuller Test to determine Stationarity}
+# Perform ADF test
+adf.test(ts_assignment2Data2024)
+```
+
+With a p-value of 0.9044, which is greater than the significance level of 0.05, we fail to reject the null hypothesis. The ADF test suggests that the time series may be non-stationary, meaning it may exhibit a trend or other non-constant behavior over time.
+
+
+## **1.3.4 Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test**
+```{r Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test}
+# Perform KPSS test
+kpss.test(ts_assignment2Data2024)
+```
+
+With a P-value of 0.01, which is less than the typical significance level of 0.05, we reject the null hypothesis. Therefore, based on the KPSS test, there is sufficient evidence to conclude that the time series ts_assignment2Data2024 is not trend-stationary suggestive of some trend or irregular pattern in the data.
+
+## **1.3.5 Phillips-Perron Unit Root Test **
+```{r Phillips-Perron Unit Root Test}
+# Perform PP test
+pp.test(ts_assignment2Data2024)
+```
+
+With a p-Value of 0.4258, which is greater than the typical significance level of 0.05, we fail to reject the null hypothesis.
+Therefore, based on the Phillips-Perron test results, there is insufficient evidence to suggest that the time series may exhibit non-stationarity, meaning it might have a trend or irregular pattern.
+
+## **1.3.6 Normality Q-Q Plot with qqline **
+```{r Normality Q-Q Plot with qqline}
+
+# Q-Q plot with qqline
+qqnorm(y = ts_assignment2Data2024, main = "Fig 6. Q-Q Plot (Global Temp Anomalies)", col = "blue")
+qqline(y = ts_assignment2Data2024, col = 2, lwd = 2, lty = 2)
+
+```
+
+The Q-Q plot (quantile-quantile plot) shows a divergence at the end of the line. We can assume that the our dataset does not adhere to a normal distribution at both ends of the data point. 
+
+## **1.3.7 Shapiro-Wilk normality test **
+```{r Shapiro-Wilk Normality test}
+shapiro.test(ts_assignment2Data2024)
+```
+
+We can confirm that our time series does not follow a normal distribution. With a very low p-value (close to zero), significantly smaller than the typical significance level of 0.05, This shows that our time series - "ts_assignment2Data2024" is not normally distributed.
+
+## **1.3.8 Histogram with Density Plot **
+```{r}
+# Create a histogram with a density plot overlay
+hist(ts_assignment2Data2024, breaks = 20, freq = FALSE, main = "Fig 7. Histogram with Density Plot (Global Temp Anomalies)", xlab = "Value", ylab = "Density")
+lines(density(ts_assignment2Data2024), col = "blue")
+```
+
+The histogram shows our dataset is right skewed to our distribution. 
+
+## **1.4 ADDRESSING THE NON-STATIONARITY IN OUR TIME SERIES**
+
+## **1.4.1 With Box Cox Transformation **
+The Box-Cox transformation is typically used to stabilize the variance of a time series and make it more homoscedastic (having constant variance) and closer to a normal distribution.
+```{r}
+# Add a small offset to the data to make it positive
+ts_assignment2Data2024_1 <- ts_assignment2Data2024 + abs(min(ts_assignment2Data2024)) + 0.01
+
+# Apply the Box-Cox transformation
+BC <- suppressWarnings(BoxCox.ar(y = ts_assignment2Data2024_1, lambda = seq(-3, 3, 0.01)))
+
+# Plot log-likelihood versus lambda
+plot(BC$lambda, BC$loglike, type = "l", xlab = "Lambda", ylab = "Log-Likelihood",
+     main = "Fig. 8. Log-likelihood Vs Lambda for Box-Cox Transformation")
+
+BC$ci # Values of the first and third vertical lines
+
+# Find the lambda value corresponding to the maximum log-likelihood
+lambda_max <- BC$lambda[which.max(BC$loglike)]
+
+lambda_max
+
+```
+
+## **1.4.2 Box Cox Transformation: - Orginal Data vs Transformed Data Plot **
+```{r Box Cox Transformation}
+# Original Data Plot
+plot(ts_assignment2Data2024, 
+     type = "l", 
+     col = "blue", 
+     xlab = "Year", 
+     ylab = "Original Data", 
+     main = "Fig. 9. Time Series Plot (Global Temp Anomalies)")
+
+# Box-Cox Transformed Data Plot
+BC_ts_assignment2Data2024 <- BoxCox(ts_assignment2Data2024_1, lambda_max)
+plot(BC_ts_assignment2Data2024, 
+     type = "l", 
+     col = "red", 
+     xlab = "Year", 
+     ylab = "Transformed Data", 
+     main = "Fig. 10. Time Series Plot of Box-Cox Transformed Data")
+
+
+```
+
+```{r}
+shapiro.test(BC_ts_assignment2Data2024)
+```
+
+Despite the application of the Box-Cox transformation, from Fig. 9, the difference using the Shapiro-Wilk normality was marginal. The p-value = 8.765e-07 is quite far from the ideal significance level (α = 0.05). 
+ 
+ 
+## **1.4.3 Q-Q Plot of transformed Data **
+```{r Q-Q Plot of transformed data}
+# Create a QQ plot of the transformed data
+qqnorm(BC_ts_assignment2Data2024, main = "Fig. 11. QQ Plot of Transformed Data (Global Temp Anomalies", col = "red")
+
+# Add a QQ line to the plot
+qqline(y = BC_ts_assignment2Data2024, col = 1, lwd = 2, lty = 2)
+
+
+```
+
+In the context of a Box-Cox transformation, BC$ci represents the confidence interval for the estimated optimal lambda.max (λ) parameter obtained from the Box-Cox transformation. The output 1.03 indicates that the lambda value associated with the maximum log-likelihood, and thus the middle vertical line in the Box-Cox transformation plot, is approximately 1.03. This lambda value represents the optimal transformation parameter that maximizes the likelihood of the transformed data. The range [0.85, 1.19] indicates that lambda values within this range result in similar maximum log-likelihood values. We can also see that the Box-Cox transformation may not help stabilize the time series data variance; we would therefore focus on other transformation approach to achieve the possibility of normality.
+
+## **1.5 USING DIFFERENCING TO ACHIEVE STATIONARITY**
+
+## **1.5.1 Differencing our Time series **
+```{r Differencing}
+# Applying differencing to the Time series
+ts_assignment2Data2024_diff <- diff(ts_assignment2Data2024, differences = 1)
+
+# Plotting the differenced series
+plot(ts_assignment2Data2024_diff, ylab = "Anomaly", xlab = "Year",
+     main = "Fig. 12. Time series Plot (Global Land Temperature Anomalies)", type="o")
+
+```
+
+After applying the first differencing to the time series data, Fig. 11. shows that there is an observable change in the plot. Our plot appears seasonal and stationary. We would need to carry out further test to confirm our observation.
+
+## **1.5.2 Confirming Stationarity **
+```{r Augmented Dickey-Fuller Test to determine Stationarity (diff)}
+# Perform ADF test
+adf.test(ts_assignment2Data2024_diff)
+```
+
+With a p-value of 0.01, which is less than the significance level of 0.05, we reject the null hypothesis. Therefore, based on the ADF test results, we have sufficient evidence to conclude that the differenced time series ts_assignment2Data2024_diff is stationary.
+
+
+## **1.5.1.1. Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test**
+```{r Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test (diff)}
+# Perform KPSS test
+kpss.test(ts_assignment2Data2024_diff)
+```
+
+With the p-value (0.1) which is greater than the significance level, we fail to reject the null hypothesis. Therefore, based on the KPSS test results, there is insufficient evidence to conclude that the differenced time series ts_assignment2Data2024_diff is non-stationary around a deterministic trend.
+
+## **1.5.1.2. Phillips-Perron Unit Root Test **
+```{r Phillips-Perron Unit Root Test (diff)}
+# Perform PP test
+pp.test(ts_assignment2Data2024_diff)
+```
+
+With a p-value (0.01) is less than the significance level, we reject the null hypothesis. Therefore, based on the PP test results, we have sufficient evidence to conclude that the differenced time series ts_assignment2Data2024_diff is stationary.
+
+## **1.6. MODEL SPECIFICATION AND FITTTING **
+Using ARIMA (AutoRegressive Integrated Moving Average) models provides a widely used context in time series forecasting techniques. For determining the best model, we would use a combination of steps/processes. such as Auto.Arima, EACF, BIC and ACF, PACF. 
+
+## **1.6.1 Approach 1: - Using ACF - PACF of First Differenced Time Series **
+```{r}
+# Plot the ACF of the first differenced time series
+acf(ts_assignment2Data2024_diff, main = "Fig. 13. ACF of the First Difference")
+
+# Plot the PACF of the first differenced time series
+pacf(ts_assignment2Data2024_diff, main = "FIg 14. PACF of the First Difference")
+
+```
+
+From Figure 13 and 14, the ACF and PACF plots provide insights into the correlation structure of the differenced time series. The following observations can be noticed: - 
+
+- Both PACF and ACF display Sinusoidal properties
+- The negative correlations at lag 2 in both ACF and PACF indicate that the current observation is negatively correlated with the observation two time points ago.
+- The presence of significant correlations at lags 4, 14, and 18 in the ACF suggests potential seasonality or periodic behavior in the data.
+- The sinusoidal shape of the ACF plot further supports the presence of a cyclical pattern.
+- The PACF plot helps identify the direct relationships between observations, with significant correlations at lags 2 and 18.
+
+## **1.6.2. Approach 2: - Using EACF Plot **
+```{r}
+# Generate EACF plot 
+eacf_plot <- eacf(ts_assignment2Data2024_diff, ar.max = 14, ma.max = 14)
+
+```
+
+
+## **1.6.3. Approach 3: - BIC Table **
+```{r}
+# Generate BIC table for subset ARIMA models
+bic_table <- armasubsets(y = ts_assignment2Data2024_diff, nar = 4, nma = 4, y.name = "ts_assignment2Data2024_diff", ar.method = "ols")
+
+# Plot the BIC table
+plot(bic_table)
+
+```
+
+## **1.6.4 Approach 4: - Using AUTO ARIMA Function **
+```{r}
+auto.arima(ts_assignment2Data2024, trace = TRUE)
+
+```
+
+The EACF plot offers insights into potential ARIMA (AutoRegressive Integrated Moving Average) models by displaying combinations of possible AutoRegressive (AR) and Moving Average (MA) terms. Each row represents a potential AR order, while each column represents a potential MA order. Symbols such as "o" and "x" indicate the appropriateness of each term for modeling the data.
+
+From the output, the following can be taken into consideration:
+
+- The presence of "o" suggests the term may be suitable for inclusion.
+- Conversely, "x" indicates that the term is less likely to be appropriate.
+
+The observed "o" and "x" patterns in the plot lead to the identification of several candidate ARIMA models, including variations such as ARIMA(3,1,3), ARIMA(3,1,2), ARIMA(2,1,3), etc.
+
+Further analysis involves considering additional candidate models based on both the EACF plot and other criteria such as the Bayesian Information Criterion (BIC) table and the Auto-ARIMA function: Candidate Models like ARIMA(0,1,0), ARIMA(1,1,0), ARIMA(1,1,2), ARIMA(0,1,3), and ARIMA(1,1,1) are identified based on the "o" marks in the EACF plot, indicating potential ARIMA terms.
+
+Additional candidate models, such as ARIMA(2,1,2), ARIMA(1,1,4), ARIMA(0,1,4), etc., are derived from the Auto-ARIMA function.
+In summary, the analysis utilizes the EACF plot, BIC table, and Auto-ARIMA function to identify a range of potential ARIMA models, considering various combinations of AR and MA terms along with differencing orders. These candidate models provide a basis for further evaluation and selection of the most suitable model for the time series data.
+
+## **1.6.5 Testing our candidate models with Box - Ljung Test **
+```{r}
+
+# Define the candidate models
+candidate_models <- list(
+  ARIMA_001 = c(0, 1, 0),
+  ARIMA_110 = c(1, 1, 0),
+  ARIMA_112 = c(1, 1, 2),
+  ARIMA_013 = c(0, 1, 3),
+  ARIMA_111 = c(1, 1, 1),
+  ARIMA_113 = c(1, 1, 3),
+  ARIMA_212 = c(2, 1, 2),
+  ARIMA_011 = c(0, 1, 1),
+  ARIMA_012 = c(0, 1, 2),
+  ARIMA_213 = c(2, 1, 3),
+  ARIMA_114 = c(1, 1, 4),
+  ARIMA_014 = c(0, 1, 4),
+  ARIMA_214 = c(2, 1, 4)
+)
+
+# Function to perform Box-Ljung test for a given model
+perform_box_ljung_test <- function(model_order, ts_assignment2Data2024) {
+  model <- Arima(ts_assignment2Data2024, order = model_order)
+  residuals <- resid(model)
+  
+  # Perform Box-Ljung test
+  box_ljung_test <- Box.test(residuals, lag = 20, type = "Ljung-Box")
+  
+  return(box_ljung_test)
+}
+
+# Perform Box-Ljung test for each candidate model
+box_ljung_test_results <- lapply(candidate_models, function(model_order) {
+  perform_box_ljung_test(model_order, ts_assignment2Data2024)
+})
+
+# Print the results
+names(box_ljung_test_results) <- names(candidate_models)
+print(box_ljung_test_results)
+
+```
+
+ARIMA_001, ARIMA_110, ARIMA_111, and ARIMA_011 have small p-values (< 0.05), indicating significant autocorrelation in the residuals.
+The other models have p-values greater than 0.05, suggesting no significant autocorrelation in the residuals at a typical significance level of 0.05. However, it's essential to interpret these results cautiously and consider additional diagnostics and model evaluation criteria.
+
+## **1.6.6 Testing our candidate models with Shapiro-Wilk normality test **
+```{r}
+# Define the candidate models
+candidate_models <- list(
+  ARIMA_001 = c(0, 1, 0),
+  ARIMA_110 = c(1, 1, 0),
+  ARIMA_112 = c(1, 1, 2),
+  ARIMA_013 = c(0, 1, 3),
+  ARIMA_111 = c(1, 1, 1),
+  ARIMA_113 = c(1, 1, 3),
+  ARIMA_212 = c(2, 1, 2),
+  ARIMA_011 = c(0, 1, 1),
+  ARIMA_012 = c(0, 1, 2),
+  ARIMA_213 = c(2, 1, 3),
+  ARIMA_114 = c(1, 1, 4),
+  ARIMA_014 = c(0, 1, 4),
+  ARIMA_214 = c(2, 1, 4)
+)
+
+# Function to perform Shapiro-Wilk test for a given model
+perform_shapiro_wilk_test <- function(model_order, ts_assignment2Data2024) {
+  model <- Arima(ts_assignment2Data2024, order = model_order)
+  residuals <- resid(model)
+  
+  # Perform Shapiro-Wilk test
+  shapiro_wilk_test <- shapiro.test(residuals)
+  
+  return(shapiro_wilk_test)
+}
+
+# Perform Shapiro-Wilk test for each candidate model
+shapiro_wilk_test_results <- lapply(candidate_models, function(model_order) {
+  perform_shapiro_wilk_test(model_order, ts_assignment2Data2024)
+})
+
+# Print the results
+names(shapiro_wilk_test_results) <- names(candidate_models)
+print(shapiro_wilk_test_results)
+
+
+```
+
+Based on the p-values:
+
+ARIMA_001, ARIMA_110, ARIMA_111, and ARIMA_011 have large p-values (> 0.05), indicating that the residuals are likely normally distributed. The other models have small p-values (< 0.05), suggesting that the residuals may not follow a normal distribution.
+
+## **1.6.7 Candidate Model's AIC and BIC Confirmation test **
+```{r}
+
+fit_arima_models <- function(time_series, arima_orders) {
+  models <- list()
+  for (order in arima_orders) {
+    cat("Fitting model with order:", order, "\n")
+    tryCatch({
+      model <- arima(time_series, order = order, method = 'CSS-ML')
+      coef_test <- coeftest(model)
+      aic_score <- AIC(model)
+      bic_score <- BIC(model)
+      models[[paste("ARIMA(", paste(order, collapse = ","), ")", sep = "")]] <- list(model = model, coef_test = coef_test, AIC = aic_score, BIC = bic_score)
+      cat("Model fitted successfully!\n")
+    }, error = function(e) {
+      cat("Error fitting model:", conditionMessage(e), "\n")
+    })
+  }
+  return(models)
+}
+
+# Define the list of ARIMA models
+arima_orders <- list(
+  c(0, 1, 0), c(1, 1, 0), c(1, 1, 2), c(0, 1, 3),
+  c(1,1,1), c(1,1,3), c(2,1,2), c(0,1,1),
+  c(0,1,2), c(0,1,3), c(2,1,3), c(1,1,4), 
+  c(0,1,4), c(2,1,4)
+)
+ts_assignment2Data2024_models <- fit_arima_models(ts_assignment2Data2024, arima_orders)
+
+# Accessing the models and their coefficient tests, AIC and BIC scores:
+for (model_name in names(ts_assignment2Data2024_models)) {
+  cat("Model:", model_name, "\n")
+  cat("Coefficient test:\n")
+  print(ts_assignment2Data2024_models[[model_name]]$coef_test)
+  cat("AIC:", ts_assignment2Data2024_models[[model_name]]$AIC, "\n")
+  cat("BIC:", ts_assignment2Data2024_models[[model_name]]$BIC, "\n\n")
+}
+
+```
+
+We use the Hybrid Method: The "CSS-ML" hybrid method combines elements of both Conditional Sum of Squares and Maximum Likelihood estimation. It likely involves an iterative approach where the optimization algorithm alternates between CSS and ML steps to refine the parameter estimates and improve the overall fit of the ARIMA model to the data.
+
+This hybrid approach may offer advantages such as computational efficiency, robustness, or improved performance compared to using either CSS or ML alone. By leveraging the strengths of both methods, the hybrid approach aims to provide more accurate parameter estimates and better model fit for time series data.
+
+Based on the AIC and BIC values, the most ideal models (with lowest AIC and BIC values) are:
+
+- ARIMA(1,1,0)
+- ARIMA(0,1,0)
+
+Using the aforementioned aproach above, ARIMA(1,1,0) appears to be the best model as it has the lowest AIC and BIC values (-324.3068 for both), indicating the best balance between goodness of fit and model complexity.
+
+## **1.6.8. Candidate Model's Accuracy table confirmation **
+```{r}
+
+# Define the candidate models
+candidate_models <- list(
+  ARIMA_001 = c(0, 1, 0),
+  ARIMA_110 = c(1, 1, 0),
+  ARIMA_112 = c(1, 1, 2),
+  ARIMA_013 = c(0, 1, 3),
+  ARIMA_111 = c(1, 1, 1),
+  ARIMA_113 = c(1, 1, 3),
+  ARIMA_212 = c(2, 1, 2),
+  ARIMA_011 = c(0, 1, 1),
+  ARIMA_012 = c(0, 1, 2),
+  ARIMA_213 = c(2, 1, 3),
+  ARIMA_114 = c(1, 1, 4),
+  ARIMA_014 = c(0, 1, 4),
+  ARIMA_214 = c(2, 1, 4)
+)
+
+# Function to compute accuracy metrics for a given model
+compute_accuracy <- function(model_order, ts_assignment2Data2024) {
+  tryCatch({
+    model <- Arima(ts_assignment2Data2024, order = model_order)
+    accuracy_metrics <- accuracy(model)
+    return(accuracy_metrics)
+  }, error = function(e) {
+    return(rep(NA, 7)) # Return NA values for all metrics in case of error
+  })
+}
+
+# Compute accuracy metrics for each candidate model
+accuracy_results <- lapply(candidate_models, function(model_order) {
+  compute_accuracy(model_order, ts_assignment2Data2024)
+})
+
+# Create a table of accuracy results
+accuracy_table <- tibble(
+  Model = names(candidate_models),
+  ME = sapply(accuracy_results, function(x) x[1]),
+  RMSE = sapply(accuracy_results, function(x) x[2]),
+  MAE = sapply(accuracy_results, function(x) x[3]),
+  MPE = sapply(accuracy_results, function(x) x[4]),
+  MAPE = sapply(accuracy_results, function(x) x[5]),
+  MASE = sapply(accuracy_results, function(x) x[6]),
+  ACF1 = sapply(accuracy_results, function(x) x[7])
+)
+
+# Print the accuracy table
+print(accuracy_table)
+
+```
+
+From the Accuracy table, the model with the lowest RMSE, MAE, MAPE, MASE, and ACF1 is ARIMA(011). However, it's important to note that ARIMA(111) has the highest ME among all models, suggesting that on average, its forecasts are slightly biased. This may indicate that while its point forecast accuracy is slightly lower, its direction of errors is better balanced.
+Since we cannot calculate MPE for any model (resulting in NaN), it's not possible to determine which model performs best in terms of percentage error.
+
+Considering a combination of the lowest RMSE, MAE, MAPE, MASE, and ACF1, along with a reasonably low ME, ARIMA(011) appears to be the best overall model and is likely to perform reasonably well across the board.
+
+## **1.6.9. Preferred Candidate Model's residual Test confirmation **
+```{r}
+# Fit the ARIMA(0,1,1) model
+model_011 <- Arima(ts_assignment2Data2024, order = c(0, 1, 1))
+
+# Fit the ARIMA(0,1,0) model
+model_010 <- Arima(ts_assignment2Data2024, order = c(0, 1, 0))
+
+# Obtain residuals for ARIMA(0,1,1) model
+residuals_011 <- resid(model_011)
+
+# Obtain residuals for ARIMA(0,1,0) model
+residuals_010 <- resid(model_010)
+
+# Standardize residuals for ARIMA(0,1,1) model
+standardized_residuals_011 <- residuals_011 / sqrt(var(residuals_011))
+
+# Standardize residuals for ARIMA(0,1,0) model
+standardized_residuals_010 <- residuals_010 / sqrt(var(residuals_010))
+
+# Residual plot for ARIMA(0,1,1) model
+plot(residuals_011, main = "Fig.15.Residual Plot (ARIMA(0,1,1))", ylab = "Residuals")
+
+# Time series plot of standardized residuals for ARIMA(0,1,1) model
+plot(standardized_residuals_011, type = "l", main = "Fig.16.Time Series Plot of Standardized Residuals (ARIMA(0,1,1))", ylab = "Standardized Residuals")
+
+# Generate histogram of standardized residuals for ARIMA(0,1,1) model
+hist(standardized_residuals_011, main = "Fig. 17.Histogram of Standardized Residuals (ARIMA(0,1,1))", xlab = "Standardized Residuals", ylab = "Frequency")
+
+# Generate QQ plot
+qqnorm(standardized_residuals_011, xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+qqline(standardized_residuals_011)
+
+# Add a custom title below the plot
+title(main = "Fig 18", sub = "", adj = 0.285)
+
+
+# ACF plot of standardized residuals for ARIMA(0,1,1) model
+acf(standardized_residuals_011, main = "Fig.19.ACF Plot of Standardized Residuals (ARIMA(0,1,1))")
+
+# PACF plot of standardized residuals for ARIMA(0,1,1) model
+pacf(standardized_residuals_011, main = "Fig.20.ACF Plot of Standardized Residuals (ARIMA(0,1,1))")
+
+# Residual plot for ARIMA(0,1,0) model
+plot(residuals_010, main = "Fig. 21.Residual Plot (ARIMA(0,1,0))", ylab = "Residuals")
+
+# Time series plot of standardized residuals for ARIMA(0,1,0) model
+plot(standardized_residuals_010, type = "l", main = "Fig.22. Time Series Plot of Standardized Residuals (ARIMA(0,1,0))", ylab = "Standardized Residuals")
+
+# Generate histogram of standardized residuals for ARIMA(0,1,0) model
+hist(standardized_residuals_010, main = "Fig.23. Histogram of Standardized Residuals (ARIMA(0,1,0))", xlab = "Standardized Residuals", ylab = "Frequency")
+
+# Generate QQ plot
+qqnorm(standardized_residuals_010, xlab = "Theoretical Quantiles", ylab = "Sample Quantiles")
+qqline(standardized_residuals_010)
+
+# Add a custom title below the plot
+title(main = "Fig 24", sub = "", adj = 0.285)
+
+
+# ACF plot of standardized residuals for ARIMA(0,1,0) model
+acf(standardized_residuals_010, main = "Fig.25. ACF Plot of Standardized Residuals (ARIMA(0,1,0))")
+
+
+```
+
+Figure 15 to Fig 22 shows residual plot for - ARIMA(1,1,0) and ARIMA(0,1,0). They do not display any trend though they display seasonality and variance. The histogram of the standardized residuals for both candidates ranges between -2 and +. The Quantile-Quantile (QQ) plot shows some slight deviation for some of the data points at both tails which confirms some deviation from normality same is observed for our standardized residuals. We sill have significant correlation in our ACF plot which can be seen in both candidate models. Our model captures our expectation even though there is a need for further improvement in order to be able to properly forecast with subsequent datasets/time series. 
+
+## **1.6.10. Five Year Forecast - Preferred Candidate Model **
+```{r}
+
+# ARIMA(0,1,0) model
+model_001 <- Arima(ts_assignment2Data2024, order = c(0, 1, 0), method = 'CSS-ML')
+
+# Forecast the next 5 time steps
+forecast_values_001 <- forecast::forecast(model_001, h = 5)
+
+
+# Plot the forecast
+plot(forecast_values_001, xlab = "Time", ylab = "Forecasted Values", main = "Fig.26. ARIMA(0,1,0) Forecast")
+
+
+# Display the forecast values
+print(forecast_values_001)
+
+
+# ARIMA(0,1,1) model
+model_011 <- Arima(ts_assignment2Data2024, order = c(0, 1, 1), method = 'CSS-ML')
+
+# Forecast the next 5 time steps
+forecast_values_011 <- forecast::forecast(model_011, h = 5)
+
+plot(forecast_values_011, xlab = "Time", ylab = "Forecasted Values", main = "Fig.27. ARIMA(0,1,1) Forecast")
+
+# Display the forecast values
+print(forecast_values_011)
+
+
+```
+
+## **RESULTS **
+The analysis began with the exploration of the "assignment2Data2024" dataset, which contains yearly Global Land Temperature Anomalies from 1850 to 2023. Visual inspection of the time series plot revealed a progressively upward trend over the years, with noticeable fluctuations and a change in variance. Further examination using scatter plots and lagged scatter plots indicated a positive linear trend and potential autocorrelation in the data. Subsequent analysis involved fitting multiple ARIMA models with different parameters and assessing their performance using various evaluation metrics.
+
+Evaluation of the ARIMA models based on criteria such as AIC, BIC, and diagnostic tests revealed that ARIMA(1,1,0) and ARIMA(0,1,0) emerged as two most suitable model despite other ARIMA candidate models identified which are also very tangible to use. This model demonstrated lower AIC and BIC values compared to others, indicating a better fit for the data. Additionally, the residuals of both exhibited less significant autocorrelation and were likely normally distributed, further validating its suitability for forecasting.
+
+## **DISCUSSION **
+The upward trend observed in the temperature anomalies suggests a long-term increase in global land temperatures over the years, with potential implications for climate change. The fluctuations and change in variance indicate the presence of variability in temperature anomalies, which may be influenced by natural climate variability and human activities. The identification of ARIMA(0,1,0) and (0,1,1) and as the most appropriate model highlights the importance of considering both simplicity and performance in model selection. The absence of significant autocorrelation and normality in the residuals of ARIMA(0,1,0) and (0,1,1) further strengthens its reliability for forecasting.
+
+## **CONCLUSION **
+Based on the evaluation metrics and diagnostic tests, ARIMA(0,1,0) and (0,1,1) is recommended as the preferred model for forecasting global land temperature anomalies. This model provides a balance between simplicity and performance, offering reliable estimates and forecasts. The findings suggest a continuation of the upward trend in land temperatures, emphasizing the importance of addressing climate change through mitigation and adaptation measures.
+
+## **RECOMMENDATIONS **
+- Utilize both ARIMA models (0,1,0) and (0,1,1) for future forecasting of global land temperature anomalies, considering its robust performance and suitability for the data.
+- Monitor and reassess the model periodically to account for any changes in temperature trends or underlying dynamics.
+- Explore additional factors, such as greenhouse gas emissions and land-use changes, to enhance the predictive accuracy of the model.
+- Consider integrating other forecasting methods, such as machine learning techniques or ensemble models, to capture complex interactions and uncertainties in climate systems.
+- Collaborate with climate scientists and policymakers to leverage forecasted temperature anomalies for informed decision-making and climate action planning.
+- By following these recommendations, stakeholders can leverage the insights from time series analysis to better understand and address the challenges posed by climate change, ultimately contributing to sustainable environmental management and societal well-being.
+
+## **REFERENCES **
+
+Concept of Stationarity test ADF-1.pdf (2019) Instructure.com, https://rmit.instructure.com/courses/112639/files/30914858?wrap=1, accessed 24 March 2024.
+
+Hyndman, R.J., Koehler, A.B., Ord, J.K., and Snyder, R.D. (2008). Forecasting with exponential smoothing: the state space approach, Springer-Verlag.
+
+MyApps Portal (2019a) Instructure.com, https://rmit.instructure.com/courses/124176/files/36179093?module_item_id=5935310, accessed 24 April 2024.
+
+
+https://www.kaggle.com/datasets/luisblanche/quarterly-tourism-in-australia/code
+
+MyApps Portal (2019b) RMIT Instructure.com, https://rmit.instructure.com/courses/124176/files/36179237?module_item_id=5935377&fd_cookie_set=1, accessed 24 April 2024.
+
+MyApps Portal (2019c) Instructure.com, https://rmit.instructure.com/courses/124176/files/36179023?module_item_id=5935405&fd_cookie_set=1, accessed 23 April 2024.
+
+MyApps Portal (2019d) Instructure.com, https://rmit.instructure.com/courses/124176/files/36179219?module_item_id=5935410, accessed 1 May 2024.
+
+MyApps Portal (2019e) Instructure.com, https://rmit.instructure.com/courses/124176/files/37562069?module_item_id=6150705, accessed 1 May 2024. 
+
+(2024) Instructure.com, https://rmit.instructure.com/courses/124176/files/36178912?module_item_id=5935330&fd_cookie_set=1, accessed 22 April 2024.
+
+OpenAI. (2024). ChatGPT (March 26 version) [ANN Network + ARIMA Models]. https://chat.openai.com/chat
+
+OpenAI. (2024). ChatGPT (March 24 version) [Multiple Regression, AIC and BIC]. https://chat.openai.com/chat
+
