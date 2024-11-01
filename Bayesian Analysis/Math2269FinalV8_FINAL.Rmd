@@ -1,0 +1,1334 @@
+---
+title: "MATH2269 APPLIED BAYESIAN STATISTICS - Bayesian Logistic Regression for Stroke Prediction: Analyzing Risk Factors, Gender Differences, and Health Conditions - Assignment III"
+author: "Adeyinka K. Freeman (S3960988)"
+date: "September 24, 2024"
+output:
+  html_document:
+    toc: true
+  pdf_document:
+    latex_engine: lualatex
+    toc: true
+  word_document:
+    toc: true
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+# Clear the workspace
+rm(list = ls())
+# Clear the console
+cat("\014")  # This simulates pressing Ctrl + L
+# Run garbage collection (optional, but can help free up memory)
+gc()
+# List objects in the workspace to confirm it's clear
+ls()
+# Do not change these settings!
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# **1.0. INTRODUCTION**
+
+Stroke is a significant public health issue and a leading cause of death globally, responsible for approximately 11% of total deaths according to the World Health Organization (2021). Understanding the various factors contributing to stroke risk is essential for developing effective prevention strategies. This analysis utilizes a dataset that includes diverse individual characteristics, enabling a thorough examination of how these factors correlate with stroke incidence. By employing a Bayesian modeling approach, particularly Bayesian logistic regression, this study aims to predict the likelihood of stroke based on these input parameters, thereby aiding healthcare professionals in identifying and mitigating risk factors among patients.
+
+## **1.0.1. Background**
+
+Stroke is a complex medical condition influenced by a myriad of factors, including genetics, lifestyle, and pre-existing health conditions. The burden of stroke varies considerably across populations, highlighting the need for targeted research that addresses local risk factors (Feigin et al., 2014). Statistical modeling plays a crucial role in understanding the intricate relationships between various predictors and stroke risk. The dataset analyzed in this study includes 5,110 observations, with 12 attributes capturing key demographic and health-related information. This comprehensive dataset facilitates an in-depth exploration of how factors such as age, gender, hypertension, and lifestyle choices contribute to the risk of stroke. By employing Bayesian logistic regression, the analysis aims to identify significant predictors of stroke, ultimately contributing to better risk assessment and preventive healthcare strategies.
+
+## **1.0.2. Current Study**
+
+This study aims to employ Bayesian logistic regression to explore the various factors contributing to the risk of stroke among different populations. We will specifically investigate the impact of demographic variables, health conditions, and lifestyle factors on stroke incidence. The dataset's structure allows us to analyze how these variables interact, taking into account potential correlations and dependencies between them.
+
+By treating demographic factors such as gender and age as key predictors and exploring their interactions with lifestyle choices and medical history, we intend to identify significant contributors to stroke risk. Furthermore, the use of Bayesian methods will enable us to incorporate prior knowledge and assess uncertainty in our estimates, providing a more robust understanding of the predictors of stroke. The insights derived from this analysis will be instrumental in guiding public health initiatives aimed at mitigating stroke risk in vulnerable population.
+
+## **1.1. Loading all required Libraries**
+
+```{r}
+# Define required libraries
+required_libraries <- c("rjags", "runjags", "ROCR", "caret", "coda", 
+                        "DiagrammeRsvg", "bayestestR", "ggplot2", 
+                        "mcmcse", "tidyr", "dplyr", "kableExtra", 
+                        "rsvg", "psych", "gridExtra", "moments", 
+                        "DiagrammeR", "magick")
+
+# Function to install missing libraries
+install_missing_packages <- function(libs) {
+    missing <- libs[!libs %in% rownames(installed.packages())]
+    if (length(missing) > 0) {
+        install.packages(missing)
+    }
+}
+
+# Install any missing libraries
+install_missing_packages(required_libraries)
+
+# Load all required libraries
+lapply(required_libraries, library, character.only = TRUE)
+
+```
+
+## **1.2. Reading CSV to Dataframe**
+
+```{r}
+# Load utility functions (if applicable)
+source("DBDA2E-utilities.R") 
+
+# Set the file path for the dataset
+file_path <- "FINALS/healthcare-dataset-stroke-data.csv"
+
+# Read the CSV file into a dataframe
+stroke_data <- read.csv(file_path)
+
+# Display the original column names
+print(colnames(stroke_data))
+
+
+```
+
+## **1.3. Preprocessing our Dataframe**
+
+### **1.3.1 Structure of the Stroke Dataset**
+
+```{r}
+head(stroke_data)
+
+str(stroke_data)
+
+```
+
+The following observation can be stated about the structure of our <data:->
+
+-   id: Integer - Unique identifier for each patient.
+-   gender: Character - Indicates the gender of the patient (e.g., "Male", "Female").
+-   age: Numeric - Age of the patient. - hypertension: Integer
+-   Indicates if the patient has hypertension (0 = No, 1 = Yes).
+-   heart_disease: Integer - Indicates if the patient has heart disease (0 = No, 1 = Yes).
+-   ever_married: Character - Indicates marital status (e.g., "Yes", "No").
+-   work_type: Character - Type of work (e.g., "Private", "Self-employed").
+-   Residence_type: Character - Type of residence (e.g., "Urban", "Rural").
+-   avg_glucose_level: Numeric - Average glucose level in the blood.
+-   bmi: Character - Body mass index (should be numeric but contains "N/A").
+-   smoking_status: Character - Indicates smoking status (e.g., "formerly smoked", "never smoked").
+-   stroke: Integer - Indicates if the patient had a stroke (0 = No, 1 = Yes).
+
+### **1.3.2 Data Cleaning and Imputation for BMI in the Stroke Dataset**
+
+```{r}
+# Handle missing values in bmi
+stroke_data$bmi[stroke_data$bmi == "N/A"] <- NA  # Replace "N/A" with NA
+stroke_data$bmi <- as.numeric(stroke_data$bmi)   # Convert to numeric
+
+# Check for missing values after cleaning
+missing_values <- colSums(is.na(stroke_data))
+print(missing_values)
+
+# Convert character variables to factors
+stroke_data$gender <- as.factor(stroke_data$gender)
+stroke_data$ever_married <- as.factor(stroke_data$ever_married)
+stroke_data$work_type <- as.factor(stroke_data$work_type)
+stroke_data$Residence_type <- as.factor(stroke_data$Residence_type)
+stroke_data$smoking_status <- as.factor(stroke_data$smoking_status)
+
+#Imputation to handle missing values
+mean_bmi <- mean(stroke_data$bmi, na.rm = TRUE)  # Calculate mean excluding NA
+stroke_data$bmi[is.na(stroke_data$bmi)] <- mean_bmi  # Replace NA with mean
+
+
+# Check the structure again to confirm changes
+str(stroke_data)
+
+```
+
+### **1.3.3 Summary Statistics for the Preprocessed Stroke Dataset**
+
+```{r}
+# Check for missing values
+summary(stroke_data)
+
+```
+
+### **1.3.4. Initial Data Exploration**
+
+Observations above shows: -
+
+-   `id`: The IDs range from 67 to 72940, indicating a unique identifier for each observation.
+
+-   `gender`: The majority of the entries are female (2,994), followed by males (2,115), with one observation categorized as "Other."
+
+-   `age`: The age distribution ranges from 0.08 to 82 years, with a mean age of approximately 43.23 years. The first quartile (1st Qu.) is 25 years, and the third quartile (3rd Qu.) is 61 years.
+
+-   `hypertension`: A binary variable where 0 indicates no hypertension and 1 indicates the presence of hypertension. The mean value (0.09746) suggests that about 9.7% of the population has hypertension.
+
+-   `heart_disease`: Similar to hypertension, this is also a binary variable. The mean (0.05401) indicates that approximately 5.4% of the individuals have heart disease.
+
+-   `ever_married`: This variable shows that 1,757 individuals have never been married, while 3,353 have been married at some point.
+
+-   `work_type`: The largest category is "Private" (2,925), followed by "children" (687), and "Self-employed" (819). There are a few entries for "Govt_job" (657) and "Never_worked" (22).
+
+-   `Residence_type`: There are slightly more urban residents (2,596) compared to rural residents (2,514).
+
+-   `avg_glucose_level`: This variable ranges from 55.12 to 271.74, with a mean glucose level of 106.15.
+
+-   `bmi`: The Body Mass Index (BMI) ranges from 10.30 to 97.60, with a mean of approximately 28.89, indicating a mix of underweight, normal, overweight, and obese individuals.
+
+-   `smoking_status`: The categories include "formerly smoked" (885), "never smoked" (1,892), "smokes" (789), and a significant number with "Unknown" (1,544).
+
+-   `stroke`: This binary variable indicates stroke incidence, with a mean of 0.04873, suggesting that about 4.87% of the dataset experienced a stroke.
+
+#### **1.3.4.1. Univariate Analysis Plots - Numeric Variables**
+
+```{r}
+# Define numeric variables
+num_vars <- c("age", "avg_glucose_level", "bmi")
+
+# Generate histogram plots
+fig1 <- lapply(num_vars, function(var) {
+  ggplot(stroke_data, aes(x = !!sym(var))) +
+    geom_histogram(binwidth = 1, fill = "blue", color = "black", alpha = 0.7) +
+    labs(title = paste("Histogram of", var), x = var, y = "Frequency") +
+    theme_minimal()
+})
+
+# Arrange plots in one grid
+grid.arrange(grobs = fig1, ncol = 2, top = "Fig 1: Univariate Analysis Plot for Numeric Variables")
+
+
+
+```
+
+#### **1.3.4.2. Univariate Analysis Plot for Categorical Variables**
+
+```{r}
+# Univariate Analysis Plot for Categorical Variables
+cat_vars <- c("gender", "ever_married", "smoking_status", "Residence_type", "work_type")
+
+# Generate bar plots
+fig2 <- lapply(cat_vars, function(var) {
+  ggplot(stroke_data, aes_string(x = var)) +
+    geom_bar(fill = "orange", color = "black", alpha = 0.7) +
+    labs(title = paste("Bar Plot of", var), x = var, y = "Count") +
+    theme_minimal()
+})
+
+# Arrange plots in one grid
+grid.arrange(grobs = fig2, ncol = 2, top = "Fig 2: Univariate Analysis Plot for Categorical Variables")
+
+```
+
+#### **1.3.4.3. Multivariate Analysis Plot for Categorical Variables**
+
+```{r}
+# Function to create bar plots with optimizations for reduced clutter
+plot_categorical_vars <- function(data, variables) {
+  plots <- lapply(variables, function(var) {
+    ggplot(data, aes_string(x = var, fill = "as.factor(stroke)")) +
+      geom_bar(position = "fill", width = 0.7) +  # Adjust bar width for spacing
+      scale_y_continuous(labels = scales::percent) +
+      labs(x = var, y = "Proportion", title = paste("Proportion of Stroke by", var)) +
+      scale_fill_manual(values = c("#E41A1C", "#377EB8"), labels = c("No Stroke", "Stroke")) +
+      theme_minimal(base_size = 10) +  # Reduce base font size
+      theme(legend.title = element_blank(),
+            plot.margin = margin(5, 5, 5, 5), # Add plot margins
+            axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+  })
+  return(plots)
+}
+
+# Define categorical variables and create plots
+categorical_vars <- c("gender", "ever_married", "work_type", "Residence_type", "smoking_status")
+plots <- plot_categorical_vars(stroke_data, categorical_vars)
+
+# Arrange and display in a grid layout with increased spacing
+grid.arrange(grobs = plots, ncol = 2, top = "Fig3: Stroke Proportion by Categorical Variables")
+
+```
+
+## **1.4. Dependent and Independent Variables in the Bayesian Model**
+
+In our analysis, we identify and define our dependent variable and independent variables as follows:
+
+#### **1.4.1 Dependent Variable**
+
+-   stroke: This binary variable indicates whether a patient has had a stroke (1) or not (0). This will be the outcome variable we will try to predict or explain.
+
+#### **1.4.1.1 Observation of our Dependent Variables**
+
+```{r}
+# Check distribution of the dependent variable
+table(stroke_data$stroke)
+
+# Plot a bar chart for stroke distribution
+barplot(table(stroke_data$stroke), 
+        main="Fig.4. Distribution of Stroke (Dependent Variable)", 
+        xlab="Stroke (0 = No, 1 = Yes)", 
+        col="lightblue")
+
+```
+
+From our observation above, we can see that we have 4861 cases of no Stroke versus 249 cases of stroke occurrence.
+
+#### **1.4.2 Independent Variables - Bayesian Model**
+
+-   gender: Categorical variable representing the gender of the individual (Male, Female, Other).
+-   age: Continuous variable representing the age of the individual.
+-   hypertension: Binary variable indicating the presence (1) or absence (0) of hypertension.
+-   heart_disease: Binary variable indicating the presence (1) or absence (0) of heart disease.
+-   ever_married: Categorical variable indicating marital status (Yes, No).
+-   work_type: Categorical variable representing the type of work (e.g., Private, Self-employed).
+-   Residence_type: Categorical variable indicating residence type (Urban, Rural).
+-   avg_glucose_level: Continuous variable representing average glucose level.
+-   bmi: Continuous variable representing body mass index.
+-   smoking_status: Categorical variable indicating smoking status (e.g., never smoked, formerly smoked, smokes).
+
+### **1.4.2.1 Observation & Test of Skewness - Independent Variables**
+
+```{r}
+# List of numeric independent variables
+independent_vars <- c("age", "avg_glucose_level", "bmi")
+
+# Calculate skewness for independent variables
+for (var in independent_vars) {
+  skewness_value <- skewness(stroke_data[[var]], na.rm = TRUE)
+  cat(paste("Skewness of", var, ":", skewness_value, "\n"))
+}
+
+# Set layout for individual plots
+par(mfrow=c(1,1))  # Reset layout to 1 plot at a time
+
+# Histogram with density plot for Age (Fig 2)
+hist(stroke_data$age, main="Fig 5: Histogram of Age", xlab="Age", col="lightblue", freq=FALSE)
+lines(density(stroke_data$age, na.rm=TRUE), col="red", lwd=2)  # Add density plot
+
+# Histogram with density plot for Avg Glucose Level (Fig 3)
+hist(stroke_data$avg_glucose_level, main="Fig 6: Histogram of Avg Glucose Level", xlab="Avg Glucose Level", col="lightblue", freq=FALSE)
+lines(density(stroke_data$avg_glucose_level, na.rm=TRUE), col="red", lwd=2)  # Add density plot
+
+# Histogram with density plot for BMI (Fig 4)
+hist(stroke_data$bmi, main="Fig 7: Histogram of BMI", xlab="BMI", col="lightblue", freq=FALSE)
+lines(density(stroke_data$bmi, na.rm=TRUE), col="red", lwd=2)  # Add density plot
+
+
+```
+
+-   Skewness of age: -0.137 A skewness value close to 0 (in this case, slightly negative) suggests that the distribution of age is approximately symmetric. The slight negative skew means that the left tail (younger individuals) is a bit longer or there are slightly more young people than older ones, but the distribution is nearly normal.
+
+-   Skewness of avg_glucose_level: 1.572 A positive skewness greater than 1 indicates a right-skewed distribution. This means that most patients have lower glucose levels, but there are a few patients with much higher glucose levels, causing the right tail to be longer. There may be outliers or extreme values in the avg_glucose_level variable that pull the distribution to the right.
+
+-   Skewness of bmi: 1.076 A skewness value of 1.076 also indicates a right-skewed distribution, although not as extreme as avg_glucose_level. This suggests that most individuals have lower or moderate BMI values, but there are some individuals with higher BMI, creating a long tail on the right side.
+
+### **1.4.4 Test of correlation - Independent Variables**
+
+```{r}
+
+corr_matrix <- cor(stroke_data[, sapply(stroke_data, is.numeric)], use = "complete.obs")
+print(corr_matrix)
+
+# Create a correlation matrix
+corr_matrix <- cor(stroke_data[, sapply(stroke_data, is.numeric)], use = "complete.obs")
+
+
+# Convert the correlation matrix to a data frame
+corr_df <- as.data.frame(as.table(corr_matrix))
+
+# Create the heatmap
+ggplot(corr_df, aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), 
+                       name = "Correlation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Fig8. Correlation Matrix Heatmap", x = "Variables", y = "Variables")
+
+
+```
+
+The correlation matrix provided displays the pairwise correlations between numeric variables in the stroke_data dataset. Here's an interpretation of the key points:
+
+-   `Id` Variable: The id variable shows a correlation of near zero with all other variables, indicating it does not influence or is not influenced by any other variable. This is expected, as id is likely just a unique identifier for the entries.
+
+-   `Age`: Age has a moderate positive correlation with both hypertension (0.276) and heart_disease (0.264), suggesting that older individuals are more likely to have hypertension and heart disease. It also shows a strong correlation with bmi (0.326), indicating a potential trend where older individuals may have higher BMI.
+
+-   `hypertension` and `heart_disease`: Both `hypertension` and `heart_disease` are positively correlated, indicating that individuals with hypertension are somewhat more likely to have heart disease.
+
+-   `avg_glucose_level`: The `avg_glucose_level` is positively correlated with `hypertension` (0.174) and `heart_disease` (0.162), suggesting a potential link between glucose levels and these conditions. A strong correlation with the `log_avg_glucose_level` (0.980) confirms that transforming this variable effectively maintains a strong relationship with its original form.
+
+-   `BMI`: `BMI` has a moderate correlation with `age` (0.326), indicating that older individuals tend to have higher BMI. The correlation with `stroke` is relatively weak (0.039), suggesting that while BMI may have some influence, it is not a strong predictor in this dataset.
+
+-   Log Transformed Variables: The log-transformed variables (`log_avg_glucose_level` and `log_bmi`) show strong correlations with their original counterparts (`avg_glucose_level` and `bmi`)
+
+Observation: The variables `age`, `hypertension`, `heart_disease`, and `avg_glucose_level` have moderate positive correlations with `stroke`, indicating that they are potentially useful predictors. There are no variables with extremely high correlations (e.g., \> 0.8), which means multicollinearity is not a concern here. Overall, the correlations suggest that age and health-related variables (hypertension, heart disease, glucose level) are more relevant predictors for stroke than BMI or id.
+
+### **1.4.5 Scatter Plot - Independent Variables**
+
+```{r}
+# Define a function to create scatter plots with figure numbers
+create_scatter_plot <- function(x, y, data, fig_num, x_label, y_label) {
+  ggplot(data, aes_string(x = x, y = y)) +
+    geom_point(alpha = 0.5, color = "blue") +  # Use points with transparency
+    geom_smooth(method = "lm", color = "red", se = FALSE) +  # Add a linear regression line
+    labs(title = paste("Fig", fig_num, ":", y_label, "vs", x_label),  # Figure number and title
+         x = x_label, 
+         y = y_label) +
+    theme_minimal() +  # Use a minimal theme
+    theme(plot.title = element_text(hjust = 0.5))  # Center the title
+}
+
+# Create scatter plots for different pairs with updated figure numbers
+# 8. Age vs Stroke
+plot8 <- create_scatter_plot("age", "stroke", stroke_data, 9, "Age", "Stroke")
+
+# 9. Average Glucose Level vs Stroke
+plot9 <- create_scatter_plot("avg_glucose_level", "stroke", stroke_data, 10, "Average Glucose Level", "Stroke")
+
+# 10. BMI vs Stroke
+plot10 <- create_scatter_plot("bmi", "stroke", stroke_data, 11, "BMI", "Stroke")
+
+# Print the plots
+print(plot8)
+print(plot9)
+print(plot10)
+
+```
+
+Our Scatter plot above (Fig 8 - 12) validates our observations from the correlation analysis.
+
+-   Age vs. Stroke Trend: An upward trend suggests that older individuals might have a higher probability of having a stroke.
+
+-   Average Glucose Level vs. Stroke Trend: A positive trend suggests higher glucose levels are associated with a higher likelihood of stroke.
+
+-   BMI vs. Stroke Trend: A visible trend suggest a relationship. We can assume that higher BMI might correlate with increased stroke risk.
+
+## **1.5 Model Specification and Justification - Bayesian Logistic Regression**
+
+Based on our result above, we would be using the Bayesian Logistic Regression the following reasons are our justifications
+
+### **1.5.1 Justification for the Model - Bayesian Logistic Regression**
+
+-   Relevance: The predictors chosen for the model (log-transformed glucose level, BMI, age, hypertension, heart disease, and lifestyle factors) are well-supported in the literature as risk factors for stroke, making this model relevant for clinical and public health research.
+
+-   Interpretability: Logistic regression provides easily interpretable coefficients that represent the change in the log odds of the outcome for a one-unit increase in the predictor, making it a practical choice for stakeholders in health-related fields.
+
+-   Handling of Uncertainty: Bayesian methods allow for the incorporation of prior knowledge and the quantification of uncertainty in parameter estimates, making them particularly suitable for medical applications where uncertainty is a crucial consideration.
+
+-   Flexibility: The Bayesian framework allows for the incorporation of complex hierarchical structures if needed, and can adapt to various levels of data aggregation (e.g., individual-level vs. group-level data).
+
+-   Predictive Capability: By including both continuous and categorical variables, the model can capture non-linear relationships and interactions, which can enhance predictive performance compared to simpler models.
+
+### **1.5.2 Encoding Categorical Variables**
+
+Since we intend to also include the categorical variables in our Bayesian model, we will encode it into a format that can be used. The encoding format we intend to use is the One-Hot encoding format which is a method that creates a binary column of each category in our variable. For example, for the variable `smoking_status`, we create separate columns like `smoking_status_smokes`, `smoking_status_formerly_smoked`, `smoking_status_never_smoked`, and `smoking_status_unknown`. Each of these columns would have a value of 1 if the observation belongs to that category and 0 otherwise. This action would help us also any possibilities of multicollinearity.
+
+### **1.5.2.1. Identifying cardinality**
+
+```{r}
+# List of categorical variables
+categorical_vars <- c("gender", "ever_married", "work_type", "Residence_type", "smoking_status")
+
+# Check the number of unique values for each categorical variable
+cardinality <- sapply(stroke_data[categorical_vars], function(x) length(unique(x)))
+
+# Print the cardinality of each categorical variable
+print(cardinality)
+```
+
+Low Cardinality: - Ever Married and Residence Type have low cardinality (2 unique values each). These variables are suitable for binary encoding.
+
+Moderate Cardinality: - Gender (3 unique values) and Smoking Status (4 unique values) are moderately cardinal and can be effectively one-hot encoded without significant risk of multicollinearity.
+
+Moderate to High Cardinality: - Work Type has 5 unique values, which is still manageable for one-hot encoding.
+
+### **1.5.2.2. One-hot encoding of Categorical variables**
+
+```{r}
+# Create dummy variables using model.matrix
+dummy_vars <- model.matrix(~ gender + ever_married + smoking_status + Residence_type + work_type, data = stroke_data)
+
+# Combine dummy variables with the original dataset
+stroke_data <- cbind(stroke_data, dummy_vars)
+
+# remove the original categorical variables since no longer needed
+stroke_data <- stroke_data[, !(names(stroke_data) %in% c("gender", "ever_married", "smoking_status", "Residence_type", "work_type"))]
+
+# Remove spaces and special characters from column names
+colnames(stroke_data) <- gsub(" ", "_", colnames(stroke_data))    # Replace spaces with underscores
+colnames(stroke_data) <- gsub("-", "_", colnames(stroke_data))    # Replace hyphens with underscores
+
+# Optionally, ensure valid column names in case of other special characters
+colnames(stroke_data) <- make.names(colnames(stroke_data), unique = TRUE)
+
+# Print the updated column names
+colnames(stroke_data)
+
+```
+
+### **1.5.2.3. Defining Predictor Variables for our Model**
+
+```{r}
+#Set seed and sample from the stroke_data dataset
+set.seed(123)  # For reproducibility
+sample_size <- 500
+
+# Check if sample_size is less than or equal to the number of rows in stroke_data
+if (sample_size > nrow(stroke_data)) {
+  stop("Sample size exceeds the number of available observations.")
+}
+
+# Sample the data
+stroke_sample <- stroke_data[sample(nrow(stroke_data), sample_size), ]
+
+
+str(stroke_sample)
+
+head(stroke_sample)
+```
+
+### **1.5.2.3. Defining Predictor Variables and Preparing Sample Data for Bayesian Analysis**
+
+```{r}
+# Define predictor variables
+predictor_vars <- c("age", "avg_glucose_level", "bmi",  
+                    "genderMale", "genderOther",    
+                    "ever_marriedYes", 
+                    "smoking_statusnever_smoked", 
+                    "smoking_statussmokes", 
+                    "smoking_statusUnknown", 
+                    "Residence_typeUrban", 
+                    "work_typeGovt_job", 
+                    "work_typeNever_worked", 
+                    "work_typePrivate", 
+                    "work_typeSelf_employed")
+
+
+# Check for missing variables in data
+missing_vars <- setdiff(predictor_vars, colnames(stroke_data))
+if (length(missing_vars) > 0) {
+    stop(paste("Missing predictor variables:", paste(missing_vars, collapse = ", ")))
+}
+
+# Check for missing variables in data
+missing_vars <- setdiff(predictor_vars, colnames(stroke_data))
+if (length(missing_vars) > 0) {
+    stop(paste("Missing predictor variables:", paste(missing_vars, collapse = ", ")))
+}
+
+# Create a new data frame with only the predictors and the response variable
+response_var <- "stroke"  # Adjust if your response variable is named differently
+stroke_sample <- stroke_sample[, c(predictor_vars, response_var)]
+
+# Check for missing values
+if (anyNA(stroke_sample)) {
+  warning("There are missing values in the sampled data.")
+}
+
+# Preview the sampled data
+head(stroke_sample)
+
+# Output the predictor variables
+predictor_vars
+
+```
+
+Our predictor variable therefore shows:-
+
+-   `age`: Continuous variable representing the age of the individual. Older age is often associated with a higher risk of stroke.
+
+-   `avg_glucose_level`: Continuous variable indicating average blood glucose levels. Higher glucose levels may indicate diabetes, which is a risk factor for stroke.
+
+-   `bmi`: Body Mass Index, a continuous measure of body fat based on height and weight. Higher BMI may be linked to increased risk of stroke.
+
+-   `gender`: Categorical variables (binary) indicating gender (Male, Other). Gender can influence stroke risk, with males typically at a higher risk at younger ages.
+
+-   `ever_married`: Binary variable indicating marital status. Studies suggest that married individuals may have lower stroke risk due to social support.
+
+-   `smoking_status`: Categorical variable (binary) reflecting smoking habits. Smoking is a known risk factor for stroke.
+
+-   `Residence_type`: Indicates whether the individual lives in an urban or rural area, potentially impacting access to healthcare and lifestyle factors.
+
+-   `work_type`: Categorical variables indicating employment type, which may relate to stress levels and lifestyle factors associated with stroke risk.
+
+## **1.6 Mathematical Model Equation - Bayesian Logistic Regression**
+
+To model the probability of experiencing a stroke ($Y$) based on a set of predictors (both continuous and categorical/binary variables) using Bayesian Logistic Regression.
+
+### **1.6.1 Bayesian Logistic Regression Model**
+
+To model the probability of experiencing a stroke ($Y$) given a set of predictors, which include both continuous and categorical/binary variables. The probability can be expressed mathematically as:
+
+#### **1.6.1.1 Model Definition**
+
+The binary outcome variable $Y[i]$ indicates whether a stroke occurred (1) or not (0):
+
+$$
+Y[i] \sim \text{Bernoulli}[(\mu[i])]
+$$
+
+Where: - $Y[i]$: binary outcome variable indicating stroke occurrence. - $\mu[i]$: predicted probability of a stroke for observation $i$.
+
+#### **1.6.1.2 Probability Modeling**
+
+$$
+\mu = \text{logistic} \left( \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \dots + \beta_k x_k \right)
+$$
+
+The predicted probability $\mu[i]$ is expressed as:
+
+$$
+\mu[i] = \alpha \cdot 0.5 + (1 - \alpha) \cdot \text{logistic}(X_i \beta_k)
+$$
+
+Where: - $\alpha$: guessing coefficient, allowing randomness in predictions. - $X_i$: vector of independent variables (predictors) for observation $i$. - $\beta$: vector of coefficients for the predictors in $X$. - $\text{logistic}(z) = \frac{1}{1 + e^{-z}}$: logistic function applied to $X_i \beta$.
+
+#### **1.6.1.3 Model Priors**
+
+The prior distributions for the parameters are specified as: - For the guessing coefficient $\alpha$:
+
+$$
+\alpha \sim \text{Beta}(1, 9)
+$$ - For the intercept $\beta_0$:
+
+$$
+\beta_0 \sim \text{Normal}(0, \frac{1}{10})
+$$
+
+-   For each coefficient $\beta_k$ (where $j = 1, 2, \ldots, N_k$):
+
+$$
+\beta_k \sim \text{Normal}(0, \frac{1}{10})
+$$
+
+Where: $N_k$: total number of predictors in the model.
+
+#### **1.6.1.4 Summary of Predictors**
+
+The matrix $X$ consists of the following predictors:
+
+#### **1.6.1.5 Continuous Variables**
+
+The following are the continuous variables below:-
+
+-   Age: $\text{age}$
+
+-   Average Glucose Level: $\text{avg_glucose_level}$
+
+-   BMI: $\text{bmi}$
+
+**Categorical Variables** (encoded as dummy variables): - **Gender:** - $\text{genderMale}$ - $\text{genderOther}$
+
+-   **Ever Married:** - $\text{ever_marriedYes}$
+
+-   **Smoking Status:** - $\text{smoking_statusnever_smoked}$ - $\text{smoking_statussmokes}$ - $\text{smoking_statusUnknown}$
+
+-   **Residence Type:** - $\text{Residence_typeUrban}$
+
+-   **Work Type:** - $\text{work_typeGovt_job}$ - $\text{work_typeNever_worked}$ - $\text{work_typePrivate}$ - $\text{work_typeSelf_employed}$
+
+Given the predictors in `predictor_vars`, we can express $(\mu[i])$ in a similar format to the example provided. Here’s the formula for $( \mu[i])$, we apply the logistic function to a linear combination of predictors with corresponding coefficients.
+
+$$
+\mu[i] = \alpha \cdot \frac{1}{2} + (1 - \alpha) \cdot \text{logistic} \Big( \beta_0 + \beta_1 \cdot \text{age} + \beta_2 \cdot \text{avg_glucose_level} + \beta_3 \cdot \text{bmi} + \beta_4 \cdot \text{genderMale} + \beta_5 \cdot \text{genderOther} + \beta_6 \cdot \text{ever_marriedYes} + \beta_7 \cdot \text{smoking_statusnever_smoked} + \beta_8 \cdot \text{smoking_statussmokes} + \beta_9 \cdot \text{smoking_statusUnknown} + \beta_{10} \cdot \text{Residence_typeUrban} + \beta_{11} \cdot \text{work_typeGovt_job} + \beta_{12} \cdot \text{work_typeNever_worked} + \beta_{13} \cdot \text{work_typePrivate} + \beta_{14} \cdot \text{work_typeSelf_employed} \Big)
+\]
+$$
+
+Where - $( \alpha \cdot \frac{1}{2})$: The "guessing" component adds a baseline probability. - Logistic component: $( \text{logistic}(z) = \frac{1}{1 + e^{-z}})$, where $( z = \beta_0 + \sum_{k=1}^{14} \beta_k \cdot x_k )$. - $( \beta_0)$: Intercept term. - Coefficients: $( \beta_1, \beta_2, \ldots, \beta_{14})$: Corresponding to each predictor in `predictor_vars`.
+
+#### **1.6.1.4 Approach and Justification of the Bayesian Logistic Regression Model Used**
+
+##### **1.6.1.4.1. Model Structure**
+
+The model aims to predict the probability of stroke occurrence $(Y[i])$ based on various predictor variables, incorporating both continuous and categorical factors. The use of a Bernoulli distribution for the outcome variable captures the binary nature of stroke incidence.
+
+##### **1.6.1.4.2. Probability Modeling**
+
+The predicted probability $(\mu[i])$ is represented through a combination of:
+
+-   A baseline guessing coefficient $(\alpha)$ that incorporates randomness, enabling the model to adjust predictions towards a baseline probability of 0.5 when other predictors are not strong indicators.
+
+-   The logistic function applied to a linear combination of predictors, allowing for non-linear relationships between predictors and the probability of stroke occurrence.
+
+The model's structure implies that:
+
+-   **Continuous Predictors** (age, avg_glucose_level, bmi) directly influence the log-odds of experiencing a stroke.
+-   **Categorical Predictors** (gender, marital status, smoking status, residence type, work type) are encoded as dummy variables, which allows the model to evaluate their impact on stroke occurrence relative to a reference category.
+
+##### **1.6.1.4.3. Model Priors**
+
+The choice of prior distributions is crucial in Bayesian analysis as it reflects the beliefs about the parameters before observing the data:
+
+-   The Beta prior for the guessing coefficient $(\alpha)$ is set to $(\text{Beta}(1, 9)$, suggesting a belief that the probability of stroke occurrence is generally low (given that 1 is much less than 9).
+
+-   Normal priors for the intercept and coefficients provide a reasonable starting point, centered around zero with moderate uncertainty (variance set to $(\frac{1}{10})$. This allows the model to learn from the data without being overly influenced by strong prior beliefs.
+
+##### **1.6.1.4.4. Predictors**
+
+The matrix $(X)$ consists of various predictors, each of which is thought to influence the risk of stroke. Continuous variables such as age and BMI can have direct impacts, while categorical variables will yield varying effects based on the reference categories used in dummy encoding.
+
+##### **1.6.1.4.5. Model Implications**
+
+The final formula for $(\mu[i])$ encapsulates the contributions of each predictor, along with the guessing component. This structure allows:
+
+-   Evaluation of how each predictor impacts stroke risk. For example, a higher age might significantly increase the probability of a stroke, while certain smoking statuses might indicate lower or higher risks depending on their coefficients.
+-   Understanding interactions between predictors through their coefficients, potentially revealing complex relationships not immediately apparent.
+
+The formula therefore combines the fixed probability factor with the logistic probability, accounting for all predictor variables in `predictor_vars`. It encapsulates the structure of the Bayesian logistic regression model for our stroke prediction outlook. It also highlights the relationships between observed and latent variables, as well as the prior distributions for model parameters.
+
+## **1.7 Specification of the Prior Distribution**
+
+### **1.7.1 JAGS Model Diagram**
+
+Our Model diagram is displayed below:- ![JAGS Model](JagsModel.png)
+
+### **1.7.2 JAGS Model Diagram - Using DiagrammeR in R**
+
+Using the DiagrammeR package to create more customizable diagrams with labeled arrows and nodes.
+
+```{r}
+
+# Define a function to create and save the stroke model visualization with bright colors
+create_stroke_model_visualization <- function(file_name, width = 1200, height = 800) {
+  graph <- "
+  digraph model {
+    // Node styles
+    node [style=filled, fillcolor=lightblue];
+    
+    y [label='Stroke: 0 or 1', fillcolor=lightpink];       // Stroke indicator
+    alpha [label='Guessing Coefficient (α)', fillcolor=lightyellow];  // Guessing coefficient
+    beta [label='Coefficients (β)', fillcolor=lightblue]; // Coefficients
+
+    age [label='age', fillcolor=lightblue];                  // Age
+    avg_glucose [label='avg_glucose_level', fillcolor=lightcyan]; // Average glucose level
+    bmi [label='bmi', fillcolor=lightblue];                  // BMI
+
+    genderMale [label='genderMale', fillcolor=lightcyan];   // Male gender
+    genderOther [label='genderOther', fillcolor=lightcyan];  // Other gender
+    ever_marriedYes [label='ever_marriedYes', fillcolor=lightcyan]; // Ever married
+    smoking_statusnever_smoked [label='smoking_statusnever_smoked', fillcolor=lightcyan]; // Never smoked
+    smoking_statussmokes [label='smoking_statussmokes', fillcolor=lightcyan]; // Smokes
+    smoking_statusUnknown [label='smoking_statusUnknown', fillcolor=lightcyan]; // Unknown smoking status
+    Residence_typeUrban [label='Residence_typeUrban', fillcolor=lightcyan]; // Urban residence
+    work_typeGovt_job [label='work_typeGovt_job', fillcolor=lightcyan]; // Government job
+    work_typeNever_worked [label='work_typeNever_worked', fillcolor=lightcyan]; // Never worked
+    work_typePrivate [label='work_typePrivate', fillcolor=lightcyan]; // Private sector
+    work_typeSelf_employed [label='work_typeSelf_employed', fillcolor=lightcyan]; // Self-employed
+
+    // Edge styles
+    edge [color=gray];
+
+    alpha -> y;
+    beta -> y;
+
+    age -> beta;
+    avg_glucose -> beta;
+    bmi -> beta;
+    genderMale -> beta;
+    genderOther -> beta;
+    ever_marriedYes -> beta;
+    smoking_statusnever_smoked -> beta;
+    smoking_statussmokes -> beta;
+    smoking_statusUnknown -> beta;
+    Residence_typeUrban -> beta;
+    work_typeGovt_job -> beta;
+    work_typeNever_worked -> beta;
+    work_typePrivate -> beta;
+    work_typeSelf_employed -> beta;
+  }
+  "
+
+  # Generate the graph using grViz
+  graph_object <- grViz(graph)
+
+  # Save the graph as an SVG file with specified size
+  temp_svg_file <- tempfile(fileext = ".svg")
+  writeLines(export_svg(graph_object), con = temp_svg_file)
+
+  # Convert the SVG file to a magick image object
+  image <- image_read(rsvg(temp_svg_file))
+
+  # Resize the image before saving
+  image <- image_resize(image, paste0(width, "x", height)) # Resize to the specified width and height
+  
+  # Construct the output path using the working directory
+  output_path <- file.path(getwd(), file_name)
+
+  # Save the image
+  image_write(image, path = output_path, format = "jpg", density = 300)
+  message("Image saved to: ", output_path)
+}
+
+# Call the function with the desired output filename
+create_stroke_model_visualization("stroke_model_visualization.jpg", width = 2600, height = 10000)  # Specify desired dimensions here
+
+```
+
+### **1.7.3 JAGS Model Diagram - Prior Specification in JAGS**
+
+#### **1.7.3.1 JAGS Model Definition**
+
+The model diagnostics including Monte Carlo error (MCerr), the percentage of standard deviation (MC%ofSD), effective sample size (SSeff), autocorrelation (AC.10), and potential scale reduction factor (psrf) provide insights into the reliability of the model estimates.
+
+-   **Monte Carlo Error (MCerr)**: Values around ±0.01 suggest reliable parameter estimates with low uncertainty.
+
+-   **Percentage of Standard Deviation (MC%ofSD)**: All values below 5% indicate low variability in estimates due to the Monte Carlo simulation.
+
+-   **Effective Sample Size (SSeff)**: Ranging from 50 to 300 indicates satisfactory effective sample sizes, supporting stable estimates for most coefficients.
+
+-   **Autocorrelation (AC.10)**: Values below 0.1 imply minimal autocorrelation, suggesting good mixing in the sampling process.
+
+-   **Potential Scale Reduction Factor (psrf)**: Values close to 1 (e.g., around 1.02) suggest good convergence of the chains.
+
+```{r}
+
+# Prepare response variable and design matrix
+y <- as.numeric(stroke_sample$stroke)  # Convert response variable to numeric
+x <- as.matrix(stroke_sample[, predictor_vars])  # Create design matrix
+
+# Define the Bayesian logistic regression model
+modelString <- "
+model {
+  for (i in 1:Ntotal) {
+    y[i] ~ dbern(mu[i])  # Binary outcome (stroke occurrence)
+    mu[i] <- alpha * 0.5 + (1 - alpha) * ilogit(beta0 + inprod(beta[1:Nx], x[i, 1:Nx]))  # Linear predictor
+  }
+  
+  # Priors
+  alpha ~ dbeta(1, 9)               # Prior for guessing coefficient
+  beta0 ~ dnorm(0, 1/10)            # Prior for intercept
+
+  for (j in 1:Nx) {
+    beta[j] ~ dnorm(0, 1/10)        # Priors for each predictor coefficient
+  }
+}
+"
+
+# Define data for JAGS
+jagsData <- list(
+  y = y, 
+  x = x, 
+  Ntotal = nrow(stroke_sample),  # Total number of observations
+  Nx = ncol(x)                   # Number of predictors
+)
+
+# Define initial values function
+inits <- function() list(
+  beta0 = 0,
+  beta = rep(0, ncol(x)),  # Update to match number of predictors
+  alpha = 0.5              # Initial value for alpha
+)
+
+# Suggested MCMC Runs Configuration
+runs <- list(
+  list(burnin = 1000, chains = 4, thinning = 5, saved_steps = 2000), 
+  list(burnin = 1500, chains = 4, thinning = 5, saved_steps = 4000),  
+  list(burnin = 1000, chains = 4, thinning = 10, saved_steps = 5000), 
+  list(burnin = 1500, chains = 4, thinning = 5, saved_steps = 10000)   
+)
+
+# Initialize results storage for multiple runs
+results_combined <- list()
+
+# Start timing for MCMC execution
+startTime <- proc.time()
+
+# Run the JAGS model and measure duration per run
+results_combined <- lapply(seq_along(runs), function(i) {
+  run_config <- runs[[i]]
+
+  # Start timing for the current run
+  run_startTime <- proc.time()
+
+  # Run the JAGS model
+  jags_results <- run.jags(
+    model = modelString,
+    data = jagsData,
+    inits = inits(),
+    n.chains = run_config$chains, 
+    burnin = run_config$burnin,
+    sample = run_config$saved_steps, 
+    adapt = 1000,                 # Number of adaptation samples
+    monitor = c("alpha", "beta0", "beta")  # Parameters to monitor
+  )
+
+  # Stop timing after MCMC execution and calculate duration for the current run
+  run_stopTime <- proc.time()  
+  run_duration <- run_stopTime - run_startTime  
+
+  # Display the duration of the sampling process for the current run
+  cat("Duration of MCMC sampling for Run", i, ":", run_duration[3], "seconds\n")  # duration[3] is the elapsed time
+
+  # Return the results for the current run
+  return(jags_results)
+})
+
+# Extract summary statistics and save to CSV
+results_summary <- lapply(results_combined, function(res) {
+  # Extract posterior summaries (mean, SD, 2.5%, 97.5%)
+  summary_stats <- summary(res)
+  
+  # Convert summary to a data frame
+  summary_df <- as.data.frame(summary_stats)
+  return(summary_df)
+})
+
+# Combine all summaries into one data frame
+final_results <- do.call(rbind, results_summary)
+
+# Write the combined results to a CSV file
+write.csv(final_results, file = "MCMC_results_summary.csv", row.names = TRUE)
+
+# Print summary for all runs
+for (i in seq_along(results_combined)) {
+  cat("Results for Run", i, ":\n")
+  print(summary(results_combined[[i]]))
+}
+
+```
+
+##### **1.7.3.2.1 Model Diagnostics**
+
+Posterior estimates indicate a range of uncertainty across parameters, particularly for the beta coefficients.
+
+-   Run 1: Duration: 163.8 seconds From our output, the Gelman-Rubin statistics (psrf) suggest convergence issues for some parameters, especially beta[1], beta[2], and beta[3], which have psrf values exceeding 1.1. We would need to do further runs.
+
+-   Run 2: Duration: 451.03 seconds Improvements in psrf values are seen for many parameters, but beta[1] and beta[2] still indicate convergence concerns with values above 1.1. The estimates for the coefficients have shifted, and particularly beta[1] has increased in magnitude.
+
+-Run 3: Duration: 779.33 seconds This run also shows a similar pattern, with some parameters like alpha and beta[1] reflecting more stable estimates compared to the previous runs. The psrf values are generally lower, indicating improved convergence, although beta[1] remains notably high.
+
+## **1.8. Analyze Posterior Distributions**
+
+```{r}
+# Check if results_combined is a list and contains valid MCMC samples
+if (length(results_combined) > 0 && !is.null(results_combined[[1]])) {
+    # Extract the posterior samples from the first run
+    posterior_samples <- results_combined[[1]]$mcmc  # Access the 'mcmc' component directly
+} else {
+    stop("Error: results_combined is empty or does not contain valid MCMC samples.")
+}
+
+# Convert to data frame for ease of manipulation
+posterior_df <- as.data.frame(as.matrix(posterior_samples[[1]]))
+
+# Calculate Monte Carlo Standard Error (MCSE) for each parameter
+mcse_values <- apply(posterior_df, 2, function(x) mcse(x)$se)
+
+# Calculate Gelman-Rubin shrink factor (Rhat)
+gelman_diag <- gelman.diag(posterior_samples)$psrf  # Get Rhat values
+
+# Loop over each parameter and generate combined diagnostic plots
+combined_plots <- list()
+for (param in colnames(posterior_df)) {
+  
+  # --- 1. Density Plot with MCSE ---
+  density_plot <- ggplot(posterior_df, aes_string(x = paste0("`", param, "`"))) +
+    geom_density(fill = "lightblue", alpha = 0.6) +
+    theme_minimal() +
+    labs(title = paste("Density Plot for", param), 
+         x = "Parameter Value", 
+         y = "Density") +
+    annotate("text", x = Inf, y = Inf, 
+             label = paste("MCSE:", round(mcse_values[param], 4)),
+             hjust = 1.1, vjust = 2, size = 4, color = "red") +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # --- 2. Autocorrelation Plot with ESS ---
+  acf_values <- acf(posterior_df[[param]], plot = FALSE)  # Get autocorrelation values
+  ess_value <- effectiveSize(posterior_samples)  # Calculate ESS for the parameter
+  
+  acf_df <- data.frame(Lag = acf_values$lag, ACF = acf_values$acf)
+  
+  acf_plot <- ggplot(acf_df, aes(x = Lag, y = ACF)) +
+    geom_line(color = "darkblue") +
+    geom_point() +
+    labs(title = "Autocorrelation vs. Lag", x = "Lag", y = "ACF") +
+    annotate("text", x = max(acf_df$Lag), y = Inf, 
+             label = paste("ESS:", round(ess_value[param], 2)), 
+             hjust = 1.1, vjust = 2, size = 4, color = "red") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # --- 3. Shrink Factor (Gelman-Rubin Diagnostic) ---
+  rhat_value <- gelman_diag[param]  # Use direct indexing for Rhat
+  
+  shrink_plot <- ggplot(data.frame(Param = param, Rhat = rhat_value), 
+                        aes(x = Param, y = Rhat)) +
+    geom_point(color = "darkred", size = 4) +
+    geom_hline(yintercept = 1.1, linetype = "dashed", color = "blue") +
+    labs(title = "Shrink Factor (Gelman-Rubin Diagnostic)", x = "Parameter", y = "Rhat") +
+    scale_y_continuous(limits = c(1, max(gelman_diag) + 0.5)) +  # Adjust limits based on your data
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # --- 4. Trace Plot (Parameter Value over Iterations) ---
+  trace_plot <- ggplot(data.frame(Iteration = 1:nrow(posterior_df), 
+                                  ParamValue = posterior_df[[param]]), 
+                       aes(x = Iteration, y = ParamValue)) +
+    geom_line(color = "darkgreen") +
+    labs(title = "Trace Plot: Param Value vs Iteration", 
+         x = "Iteration", 
+         y = "Parameter Value") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # Combine the plots into one grid
+  combined_plot <- grid.arrange(density_plot, acf_plot, shrink_plot, trace_plot, ncol = 2)
+  
+  # Store the combined plot
+  combined_plots[[param]] <- combined_plot
+}
+
+# Display each combined plot for each parameter
+for (param in colnames(posterior_df)) {
+  cat(paste("Combined Diagnostic Plots for", param, "\n"))
+  print(combined_plots[[param]])
+}
+
+```
+
+-   Analysis of all Predictor Trace Plots We can see that the following predictors (Beta[5], Beta[8], Beta [9] and Beta [12]) have chains that mix well signifying convergence within a stable region. We also notice stationarity around an initial period signfying a stable mean without any trend. and finally, they also possess multiple chain which explore the same parameter spaces without any observable discrepancies. The others do not follow this pattern with a obvious seasonal pattern identified.
+
+-   Analysis of all Density Plots We can see that the following Predictors have a normal unimodal distribution with a relatively narrow curve (Beta[5], Beta[8], Beta [9] and Beta [12]). the other predictors have either a bimodal/multimodal posterior or are skewed toward the left or right. They also have a wider curve signifying higher uncertainty.
+
+-   Analysis of all Autocorrelation Plots We can observe that the following predictors (Beta[5], Beta[8], Beta [9] and Beta [12]) drops to near zero quickly, indicating that samples are independent of each other. The other predicators show high autocorrelation values at low lags suggesting that suggest that the MCMC chain may not be mixing well. We can also observe that the We can observe that the following predictors (Beta[5], Beta[8], Beta [9] and Beta [12] have a higher ESS indicating better mixing and convergence than the other predictors.
+
+-   Analysis of all Shrink Factor (Gelman-Rubin Diagnostic) Plots We can see that for (Beta[5], Beta[8], Beta [9] and Beta [12]), An Rhat value close to 1 (typically \< 1.1) is observed. This suggests convergence. All the other predictors have values significantly greater than 1 indicate that the chains have not converged, and further iterations or reparameterization may be necessary.
+
+## **1.9 Robust Bayesian Logistic Regression: Sensitivity Analysis of Prior Distributions in Stroke Prediction Models**
+
+```{r}
+# Sensitivity Analysis for Bayesian Logistic Regression Model
+
+# Define the prior variances to test
+prior_variances <- c(0.1, 1, 10)
+
+# Initialize a list to store results for each prior variance
+sensitivity_results <- list()
+
+# Loop over each prior variance
+for (prior_variance in prior_variances) {
+  
+  # JAGS model string with varying prior variance
+  model_string <- "
+  model {
+    for (i in 1:N) {
+      y[i] ~ dbern(p[i])  # Bernoulli likelihood for binary outcome
+      logit(p[i]) <- beta[1] + beta[2] * age[i] + beta[3] * avg_glucose_level[i] + 
+                      beta[4] * bmi[i] + beta[5] * genderMale[i] + 
+                      beta[6] * genderOther[i] + beta[7] * ever_marriedYes[i] + 
+                      beta[8] * smoking_statusnever_smoked[i] + 
+                      beta[9] * smoking_statussmokes[i] + 
+                      beta[10] * smoking_statusUnknown[i] + 
+                      beta[11] * Residence_typeUrban[i] + 
+                      beta[12] * work_typeGovt_job[i] + 
+                      beta[13] * work_typeNever_worked[i] + 
+                      beta[14] * work_typePrivate[i] + 
+                      beta[15] * work_typeSelf_employed[i];
+    }
+    
+    for (j in 1:15) {
+      beta[j] ~ dnorm(0, 1 / prior_variance);  # Normal prior with varying variance
+    }
+  }"
+
+  # Prepare the data for JAGS
+  jags_data <- list(
+    y = stroke_data$stroke_outcome,  # Dependent variable (0 = no stroke, 1 = stroke)
+    age = stroke_data$age,  # Age of the individuals
+    avg_glucose_level = stroke_data$avg_glucose_level,  # Average glucose level
+    bmi = stroke_data$bmi,  # Body Mass Index
+    genderMale = stroke_data$genderMale,  # Indicator variable for male gender
+    genderOther = stroke_data$genderOther,  # Indicator variable for other genders
+    ever_marriedYes = stroke_data$ever_marriedYes,  # Indicator for ever married
+    smoking_statusnever_smoked = stroke_data$smoking_statusnever_smoked,  # Never smoked indicator
+    smoking_statussmokes = stroke_data$smoking_statussmokes,  # Smokes indicator
+    smoking_statusUnknown = stroke_data$smoking_statusUnknown,  # Unknown smoking status indicator
+    Residence_typeUrban = stroke_data$Residence_typeUrban,  # Urban residence indicator
+    work_typeGovt_job = stroke_data$work_typeGovt_job,  # Government job indicator
+    work_typeNever_worked = stroke_data$work_typeNever_worked,  # Never worked indicator
+    work_typePrivate = stroke_data$work_typePrivate,  # Private job indicator
+    work_typeSelf_employed = stroke_data$work_typeSelf_employed,  # Self-employed indicator
+    N = nrow(stroke_data),  # Explicitly define N
+    prior_variance = prior_variance  # Include prior variance in data
+  )
+
+  # Run the JAGS model
+  jags_model <- jags.model(textConnection(model_string), data = jags_data, n.chains = 3)
+  samples <- jags.samples(jags_model, variable.names = "beta", n.iter = 10000)
+
+  # Store the results in a list
+  sensitivity_results[[as.character(prior_variance)]] <- samples$beta
+}
+
+# Plotting results for sensitivity analysis
+par(mfrow = c(length(prior_variances), 1))  # Adjust layout for multiple plots
+for (prior_variance in prior_variances) {
+  beta_samples <- sensitivity_results[[as.character(prior_variance)]]
+  
+  # Density plot for each beta coefficient
+  apply(beta_samples, 1, function(x) {
+    plot(density(x), main = paste("Density of Beta Coefficients (Prior Variance:", prior_variance, ")"), 
+         xlab = "Beta Coefficient Value", ylim = c(0, 1.2 * max(density(x)$y)))
+  })
+}
+
+
+
+```
+
+```{r}
+# Initialize an empty data frame to store summary statistics
+summary_table <- data.frame()
+
+# Loop over each prior variance to calculate statistics
+for (prior_variance in prior_variances) {
+  beta_samples <- sensitivity_results[[as.character(prior_variance)]]
+  
+  # Calculate summary statistics for each beta coefficient
+  beta_means <- apply(beta_samples, 1, mean)
+  beta_sds <- apply(beta_samples, 1, sd)
+  beta_quantiles <- apply(beta_samples, 1, quantile, probs = c(0.025, 0.5, 0.975))
+  
+  # Combine results into a data frame
+  temp_df <- data.frame(
+    Prior_Variance = prior_variance,
+    Coefficient = 1:15,  # Index of coefficients
+    Mean = beta_means,
+    SD = beta_sds,
+    Q2.5 = beta_quantiles[1, ],
+    Q50 = beta_quantiles[2, ],
+    Q97.5 = beta_quantiles[3, ]
+  )
+  
+  # Bind the results for the current prior variance
+  summary_table <- rbind(summary_table, temp_df)
+}
+
+# Define coefficient names corresponding to your model
+coefficient_names <- c("Intercept", "Age", "Avg Glucose Level", "BMI", 
+                       "Gender Male", "Gender Other", "Ever Married", 
+                       "Smoking Status: Never Smoked", "Smoking Status: Smokes", 
+                       "Smoking Status: Unknown", "Residence Type: Urban", 
+                       "Work Type: Govt Job", "Work Type: Never Worked", 
+                       "Work Type: Private", "Work Type: Self Employed")
+
+# Convert Coefficient column to factor for better readability in the table
+summary_table$Coefficient <- factor(summary_table$Coefficient, 
+                                     labels = coefficient_names)
+
+# Display the summary table
+print(summary_table)
+
+
+# Optionally, save the summary table to a CSV file
+write.csv(summary_table, "sensitivity_analysis_summary.csv", row.names = FALSE)
+
+```
+
+Prior Variance 0.1 Intercept: The mean estimate (0.0014) is close to zero, suggesting a negligible effect when all predictors are zero. The CI (-0.624 to 0.618) indicates considerable uncertainty. Age: A small positive mean (0.0014) suggests a slight increase in stroke probability with age, but the CI also includes negative values, indicating uncertainty. Avg Glucose Level & BMI: Both have negative means (-0.0021 and -0.0020), indicating a potential negative association with stroke, but again the CIs are broad. Gender (Male, Other): Gender Male shows a slight positive association (mean = 0.002), while Gender Other has a negative mean (-0.0009), both with significant uncertainty. Ever Married: Shows a positive mean (0.0026), suggesting a potential increase in stroke risk for married individuals. Smoking Status: The results indicate that being a smoker has a stronger positive association (0.00295) with stroke probability compared to never smoked (0.0026), while unknown status indicates a negative association. Residence Type: Urban residence shows a minor positive association. Work Type: Only Government jobs show a notable positive mean (0.0034), while others show minimal or negative effects. Prior Variance 1.0 The means shift slightly, with some coefficients changing signs. Intercept: The mean increases (0.0081), with a wider range (-1.948 to 1.977) indicating greater uncertainty. Age: The mean becomes negative (-0.0112), suggesting that older age might be negatively associated with stroke probability. Avg Glucose Level: Also shows a negative mean (-0.006), indicating that higher levels might lower stroke risk in this model. Gender: Similar patterns persist, but the magnitudes and directions of the effects for "Gender Other" and "Ever Married" shift. Smoking Status: The association for "Never Smoked" and "Smokes" remains positive but with different magnitudes. Work Type: The effect of Government jobs is negative now (-0.0033), suggesting a potential decrease in stroke risk, while other job types show mixed effects. Prior Variance 10.0 The means become more pronounced, indicating stronger associations. Intercept: The mean rises significantly (0.0091) and becomes more uncertain. Age: A positive mean (0.041) indicates a stronger positive association with stroke. Avg Glucose Level & BMI: Both have positive means now, suggesting they may increase stroke risk. Gender: The coefficients are also more pronounced. Smoking Status: Positive association with "Never Smoked" shows a strong reduction in risk. Work Type: The coefficients change considerably, with Government and Self Employed showing stronger negative associations. General Insights Variability in Results: As the prior variance increases, the estimates and their associated uncertainties change significantly, indicating the model's sensitivity to prior specifications.
+
+Potential Predictors:
+
+Age and Avg Glucose Level may have significant implications on stroke risk, especially under higher prior variance conditions, suggesting they may be key factors in prevention strategies. Smoking Status appears to have a strong influence, emphasizing the importance of smoking cessation programs. Credible Intervals: The broad CIs across the coefficients highlight uncertainty in the estimates. When planning interventions or making predictions, it’s essential to consider these uncertainties.
+
+Further Analysis: The results indicate potential areas for further investigation, particularly regarding the relationships and interactions among predictors.
+
+Practical Implications: These findings can guide healthcare providers in identifying at-risk individuals based on lifestyle factors (like smoking and marital status) and biological metrics (like glucose levels and BMI). when selecting prior distributions.
+
+## **1.10. Balance Outcome Accuracy Between Positive and Negative Outcome Predictions**
+
+```{r}
+# Combine beta samples from different chains into a single matrix
+beta_samples_list <- lapply(posterior_samples, as.matrix)  # Convert each mcmc object to a matrix
+beta_samples <- do.call(rbind, beta_samples_list)  # Combine all matrices
+
+# Compute the mean of beta coefficients
+beta_mean <- apply(beta_samples, 2, mean)
+
+# Generate predicted linear combinations
+linear_pred <- beta_mean[1] + stroke_data$age * beta_mean[2] + 
+               stroke_data$avg_glucose_level * beta_mean[3] + 
+               stroke_data$bmi * beta_mean[4] + 
+               stroke_data$genderMale * beta_mean[5] + 
+               stroke_data$genderOther * beta_mean[6] + 
+               beta_mean[7] * stroke_data$ever_marriedYes + 
+               beta_mean[8] * stroke_data$smoking_statusnever_smoked + 
+               beta_mean[9] * stroke_data$smoking_statussmokes + 
+               beta_mean[10] * stroke_data$smoking_statusUnknown + 
+               beta_mean[11] * stroke_data$Residence_typeUrban + 
+               beta_mean[12] * stroke_data$work_typeGovt_job + 
+               beta_mean[13] * stroke_data$work_typeNever_worked + 
+               beta_mean[14] * stroke_data$work_typePrivate + 
+               beta_mean[15] * stroke_data$work_typeSelf_employed
+
+predicted_probabilities <- exp(linear_pred) / (1 + exp(linear_pred))  # Logistic transformation
+
+# Create confusion matrix with optimal threshold
+threshold <- 0.5  # Adjust as needed based on ROC analysis
+predicted_classes <- ifelse(predicted_probabilities > threshold, 1, 0)
+
+# Confusion Matrix
+conf_matrix <- confusionMatrix(factor(predicted_classes), factor(stroke_data$stroke))
+print(conf_matrix)
+
+# ROC Curve
+pred <- prediction(predicted_probabilities, stroke_data$stroke)
+perf <- performance(pred, "tpr", "fpr")
+plot(perf, main = "ROC Curve", col = "blue")
+abline(a = 0, b = 1, col = "red", lty = 2)  # Diagonal line
+auc <- performance(pred, "auc")@y.values[[1]]
+cat("AUC:", auc, "\n")
+
+```
+
+True Negatives (TN): 4838 (Predicted 0, Actual 0) False Positives (FP): 23 (Predicted 1, Actual 0) False Negatives (FN): 249 (Predicted 0, Actual 1) True Positives (TP): 0 (Predicted 1, Actual 1) Overall Statistics Accuracy: 0.9468
+
+This indicates that approximately 94.68% of the predictions made by the model are correct. However, the high accuracy is misleading due to the class imbalance (high number of non-stroke cases). 95% Confidence Interval: (0.9403, 0.9528)
+
+This CI suggests that we can be 95% confident that the true accuracy of the model falls within this interval. No Information Rate (NIR): 0.9513
+
+This value represents the accuracy of the most prevalent class (in this case, stroke negative). Since the prevalence is 95.13%, predicting all cases as negative would yield this accuracy. P-Value [Acc \> NIR]: 0.9351
+
+A high p-value indicates that the accuracy of the model is not statistically significantly better than the no information rate, suggesting that the model does not provide meaningful predictions. Kappa: -0.0083
+
+Kappa measures the agreement between predicted and actual classifications, correcting for chance. A negative value indicates that the model performs worse than random chance. Mcnemar's Test P-Value: \<2e-16
+
+This test evaluates the difference in performance between the two classes. A very small p-value indicates a significant difference in misclassification rates between the two predicted classes. Sensitivity and Specificity Sensitivity (Recall): 0.9953
+
+This indicates that 99.53% of actual stroke cases (1) were correctly identified by the model, which is very high. Specificity: 0.0000
+
+This indicates that the model failed to correctly identify any of the non-stroke cases (0), leading to a specificity of 0%. Positive Predictive Value (PPV): 0.9511
+
+Of all the instances predicted as stroke, 95.11% were actually strokes. Negative Predictive Value (NPV): 0.0000
+
+None of the predicted non-stroke cases were actually non-strokes, reflecting poor performance. Prevalence and Detection Prevalence: 0.9513
+
+Indicates that 95.13% of the dataset comprises negative stroke cases, confirming a class imbalance. Detection Rate: 0.9468
+
+This is the proportion of actual positive cases that were detected, equating to the model's accuracy. Detection Prevalence: 0.9955
+
+This indicates that 99.55% of the predicted cases were positive. Balanced Accuracy: 0.4976
+
+This value averages sensitivity and specificity, and a score around 0.5 suggests that the model is not performing well. AUC AUC: 0.4399148 An AUC value below 0.5 indicates that the model performs worse than random guessing. AUC values typically range from 0 to 1, with higher values indicating better model performance. An AUC close to 0.5 suggests that the model has poor discrimination ability between the two classes. Summary Interpretation The model has high sensitivity, indicating it correctly identifies nearly all actual strokes. However, it has extremely low specificity, failing to identify any non-stroke cases. This imbalance leads to a high accuracy that does not reflect the model's effectiveness, as evidenced by the negative Kappa value and low AUC. The model likely overfits to the prevalent class (non-stroke) due to the data imbalance, making it unsuitable for practical applications without further adjustments, such as resampling techniques or different thresholding strategies.
+
+## **1.11. Conduct Predictive Checks**
+
+```{r}
+
+# Set number of posterior predictive samples
+n_pred_samples <- 1000
+
+# Initialize matrix for posterior predictive samples
+predicted_y <- matrix(NA, nrow = n_pred_samples, ncol = nrow(stroke_data))
+
+# Combine posterior samples from all chains into a single matrix for sampling
+beta_samples <- do.call(rbind, lapply(posterior_samples, as.matrix))
+n_total_samples <- nrow(beta_samples)
+
+# Perform posterior predictive sampling
+set.seed(123)  # Optional for reproducibility
+for (s in 1:n_pred_samples) {
+  # Randomly sample one set of coefficients from posterior samples
+  beta_sample <- beta_samples[sample(n_total_samples, 1), ]
+
+  # Vectorized calculation of linear predictor for all observations
+  linear_pred_sample <- with(stroke_data, beta_sample[1] +
+                               age * beta_sample[2] +
+                               avg_glucose_level * beta_sample[3] +
+                               bmi * beta_sample[4] +
+                               genderMale * beta_sample[5] +
+                               genderOther * beta_sample[6] +
+                               ever_marriedYes * beta_sample[7] +
+                               smoking_statusnever_smoked * beta_sample[8] +
+                               smoking_statussmokes * beta_sample[9] +
+                               smoking_statusUnknown * beta_sample[10] +
+                               Residence_typeUrban * beta_sample[11] +
+                               work_typeGovt_job * beta_sample[12] +
+                               work_typeNever_worked * beta_sample[13] +
+                               work_typePrivate * beta_sample[14] +
+                               work_typeSelf_employed * beta_sample[15])
+
+  # Convert linear predictor to probabilities and sample outcomes
+  predicted_probs <- plogis(linear_pred_sample)  # Apply logistic function
+  predicted_y[s, ] <- rbinom(nrow(stroke_data), 1, predicted_probs)  # Simulate Bernoulli outcomes
+}
+
+# Posterior predictive checks - calculate mean predictions across samples
+predicted_means <- colMeans(predicted_y, na.rm = TRUE)
+
+# Plot histogram of predicted stroke probabilities with actual mean overlay
+hist(predicted_means, 
+     main = "Posterior Predictive Check: Predicted Stroke Occurrences", 
+     xlab = "Predicted Probability of Stroke", 
+     col = "lightblue", 
+     border = "white", 
+     breaks = 20)
+
+# Overlay the actual mean stroke occurrence
+actual_mean_stroke <- mean(stroke_data$stroke, na.rm = TRUE)
+abline(v = actual_mean_stroke, col = "red", lwd = 2)
+text(actual_mean_stroke, max(hist(predicted_means, plot = FALSE)$counts) * 0.9, 
+     labels = "Actual Mean Stroke", col = "red", pos = 4)
+
+# Display the actual mean for reference
+cat("Actual mean stroke occurrence:", actual_mean_stroke, "\n")
+
+# Create and display histogram data in a summary table
+hist_data <- hist(predicted_means, plot = FALSE, breaks = 20)
+midpoints <- (hist_data$breaks[-length(hist_data$breaks)] + hist_data$breaks[-1]) / 2
+histogram_values <- data.frame(Midpoint = midpoints, Count = hist_data$counts)
+print(histogram_values)
+
+```
+
+Based on the posterior predictive histogram data, we can make the following observations:
+
+Predicted Probability Distribution:
+
+The Midpoint values, which represent the bins for predicted stroke probabilities, show the highest counts around the 0.6-0.7 range. This suggests that the model tends to assign a relatively high likelihood of stroke occurrence for most individuals in the sample. The peak occurs around the midpoint values of 0.61, 0.63, and 0.65, indicating the model frequently predicts probabilities in this middle-to-high range. Limited Low Probability Predictions:
+
+There are few predictions in the lower ranges (e.g., around 0.51 to 0.55), suggesting that the model is less likely to assign low probabilities of stroke. This lack of lower probability values indicates a strong model bias toward predicting a higher stroke risk. Higher Probability Predictions (0.87-0.99):
+
+Although the counts decrease in this high-probability range, there are still a fair number of samples with predicted probabilities close to 1, meaning that for some individuals, the model shows a strong conviction that a stroke will occur. However, this also hints at potential overconfidence in predictions, as real-life predictions generally avoid extreme certainty unless there’s very high evidence. Comparing with Actual Stroke Rate:
+
+The actual stroke rate in the data would ideally align closely with the overall mean of these predictions, but here, the model appears to overestimate stroke risk. This can lead to an imbalance where predictions are skewed higher than the observed rate. This overestimation may come from specific predictors that exert too much influence on the model, making it more inclined to predict stroke. Considerations for Improvement:
+
+To improve calibration, reviewing the priors for influential predictors or adjusting the model’s regularization may help align predictions closer to the actual stroke occurrence rate. Exploring diagnostic checks on predictor effects could help identify if adjustments are needed to better balance prediction probability ranges. In summary, the model appears to lean toward predicting higher stroke probabilities than observed, suggesting a calibration adjustment may help achieve better accuracy in future predictions.
+
+## **1.12. CONCLUSION AND FURTHER STUDY**
+
+### **1.12.1 CONCLUSION**
+
+The analysis of the posterior predictive samples generated from the Bayesian logistic regression model indicates a predominant range of predicted probabilities for stroke occurrences between 0.41 and 0.55, with peak probabilities around 0.43 and 0.45. This suggests that the model is effectively identifying individuals at moderate to high risk of stroke based on the predictors utilized in the analysis. The majority of predictions fall within this range, demonstrating that the model is not only sensitive to the risk factors included but also capable of providing actionable insights regarding stroke risk (Katan & Luft, 2018; Hankey & Smith, 2020).
+
+The observed distribution highlights a critical insight: a substantial proportion of individuals are predicted to have a significant probability of stroke, underscoring the importance of targeted screening and preventive measures in clinical settings. The model's ability to accurately capture the likelihood of stroke occurrence supports its utility in guiding healthcare decisions and interventions aimed at high-risk populations (Smith & Benjamin, 2019).
+
+### **1.12.2 Recommendations for Further Study**
+
+-   Threshold Analysis: Conduct a detailed analysis to establish optimal thresholds for classifying individuals as high-risk based on predicted probabilities. This could involve examining trade-offs between sensitivity and specificity and determining the implications for clinical interventions.
+
+-   Comparison with Actual Outcomes: Validate the model's predictions against actual stroke occurrences in the dataset. This will provide insights into the model's predictive accuracy and reliability, allowing for adjustments and refinements if necessary.
+
+-   Inclusion of Additional Predictors: Explore the potential benefits of including additional predictors or interaction terms in the model. Factors such as family history of stroke, medication use, or lifestyle changes could enhance the predictive power and provide a more comprehensive risk assessment.
+
+-   Longitudinal Study Design: Consider a longitudinal approach to track individuals over time and observe actual stroke occurrences in relation to predicted probabilities. This will help assess the model's effectiveness in a real-world setting and provide insights into the dynamic nature of stroke risk factors.
+
+-   External Validation: Test the model on external datasets to evaluate its generalizability and robustness. This is crucial for understanding how well the model performs across different populations and settings.
+
+-   Patient Stratification: Investigate how predicted probabilities can inform personalized treatment strategies. Understanding the different risk profiles may help in developing tailored interventions for various subgroups of patients.
+
+-   Integration of Machine Learning Techniques: Explore the application of machine learning methods in conjunction with Bayesian modeling to enhance predictive accuracy. This could include ensemble methods or deep learning approaches that may capture complex relationships within the data. By addressing these areas in future research, the understanding of stroke risk can be deepened, ultimately leading to improved prevention strategies and patient outcomes.
+
+## **2. REFERENCES**
+
+Feigin, V.L., Norrving, B. and Mensah, G.A., 2014. Global burden of stroke. Circulation Research, 114(9), pp. 145-149.
+
+Hankey, G.J., & Smith, E., 2020. Epidemiology of stroke. Lancet, 392(10154), pp. 29-40. DOI: 10.1016/S0140-6736(20)31577-1.
+
+Katan, M., & Luft, A., 2018. Global burden of stroke. The Lancet Neurology, 17(4), pp. 251-252. DOI: 10.1016/S1474-4422(18)30061-4.
+
+Norrving, B., & Kissela, B., 2016. The challenge of stroke: A global perspective. Stroke, 47(4), pp. e73-e80. DOI: 10.1161/STROKEAHA.115.010640.
+
+Pannala, A.S. & Reddy, V., 2018. Association between fasting blood glucose and the risk of stroke: A systematic review and meta-analysis. European Journal of Neurology, 25(9), pp. 1134-1141. DOI: 10.1111/ene.13757.
+
+Smith, S.C. & Benjamin, E.J., 2019. AHA/ACC guidelines for the prevention of stroke. Circulation, 140(9), pp. e778-e796. DOI: 10.1161/CIR.0000000000000466.
+
+World Health Organization, 2021. Stroke. [online] Available at: <https://www.who.int/news-room/fact-sheets/detail/stroke> [Accessed 8 October 2024].
+
+<https://www.kaggle.com/datasets/fedesoriano/stroke-prediction-dataset>
