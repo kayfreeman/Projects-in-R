@@ -16,3 +16,6 @@ The projects reflect my interests in:
 - Housing Market: Studying trends and patterns in housing data to understand market dynamics.
 
 ## Projects
+- Bayesian Logistic Regression Analysis for Stroke Prediction: Analyzing Risk Factors, Gender Differences, and Health Conditions
+- Time Series Analysis - Melbourne Traffic Outlook
+- Time series Analysis - Melbourne Temperature Anomalies
