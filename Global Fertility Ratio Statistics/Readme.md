@@ -1,14 +1,63 @@
-# Working-with-Melbourne Traffic Data using R
-by Adeyinka (Kay) Freeman
+# 🌍 Global Fertility Rate Animated Bar Chart Race
 
-My First Project - Traffic Count Vehicle Classification 2014-2017 (Melbourne Open Data)
-----------------------------------------------------------------------------------------
-According to Australia Bureau of Statistics 2021 Census Report, Melbourne (the capital of Victoria) has a population of 149,615 which constitutes about 3.04% of the population of Victoria at 4,917,750. According to the 2021 "Greater Capital City Statistical Area" Factsheet of Australia Bureau of Statistics, Melbourne occupies an area size of 9,993 km² (3,858.3 sq. mi) and it consists of 31 municipalities.  
-The City of Melbourne “2022 Open Data Project” Report published that the city engaged a contractor to carry out a traffic count across all the 31 municipalities in Melbourne. Records captured were done on an hourly basis. The vehicles identified were segmented into twelve (12) categories based on Austroads vehicle classification which are listed below: -
-Class 1 (Short Vehicle), Class 2 (Short Vehicle Towing), Class 3 (Two Axle Truck), Class 4 (Three Axle Truck), Class 5 (Four Axle Truck), Class 6 (Three Axle Articulated Vehicle), Class 7 (Four Axle Articulated Vehicle), Class 8 (Five Axle Articulated Vehicle), Class 9 (Six Axle Articulated Vehicle), Class 10 (B Double), Class 11 (Double Road Train) and, Class 12 (Triple Road Train). To address the anomaly of a vehicle which was not captured or could not be determined, a vehicle class 13 was used.  
-The Data range we would be covering in this assessment is for the period of 2014 to 2017. Provision in the data will show the commencement of capture of bikes, motorcycles, and maximum vehicle speed in 2016 and 2017. However, 2014 and 2015 will not include these data points. In line with the requirements for the group collaboration project, the data also includes: -  Road corridor data on “road_segment” and “seg_id”.    
+## Overview
+This Shiny application visualizes **fertility rate trends across countries** from **1960 to 2023** using a dynamic, movie-like animated bar chart. The app emphasizes **accessibility** with color-blind friendly palettes and allows users to interactively explore fertility rate changes over time.
 
-Data Source - Traffic Count Vehicle Classification 2014-2017 (Melbourne Open Data)
------------------------------------------------------------------------------------
-Please note that where records have more than one road segment, such records are taking into consideration as intersecting roads with their respesctive IDs. Our Data source can be accessed from the URL: - https://data.melbourne.vic.gov.au/explore/dataset/traffic-count-vehicle-classification-2014-2017/information/?dataChart=eyJxdWVyaWVzIjpbeyJjaGFydHMiOlt7InR5cGUiOiJsaW5lIiwiZnVuYyI6IlNVTSIsInlBeGlzIjoiYmlrZSIsInNjaWVudGlmaWNEaXNwbGF5Ijp0cnVlLCJjb2xvciI6IiNFNTBFNTYifSx7ImFsaWduTW9udGgiOnRydWUsInR5cGUiOiJsaW5lIiwiZnVuYyI6IlNVTSIsInlBeGlzIjoibW90b3JjeWNsZSIsInNjaWVudGlmaWNEaXNwbGF5Ijp0cnVlLCJjb2xvciI6IiMyMzI1MkIifV0sInhBeGlzIjoic3VidXJiIiwibWF4cG9pbnRzIjoiIiwidGltZXNjYWxlIjoiIiwic29ydCI6InNlcmllMS0xIiwiY29uZmlnIjp7ImRhdGFzZXQiOiJ0cmFmZmljLWNvdW50LXZlaGljbGUtY2xhc3NpZmljYXRpb24tMjAxNC0yMDE3Iiwib3B0aW9ucyI6e319fV0sImRpc3BsYXlMZWdlbmQiOnRydWUsImFsaWduTW9udGgiOnRydWUsInRpbWVzY2FsZSI6IiJ9 
+---
 
+## Features
+1. **Dynamic Bar Chart Race**
+   - Countries move up or down in the ranking as their fertility rates change.
+   - Highest fertility rates appear on top each year.
+   - Smooth, rank-based transitions give a cinematic effect.
+
+2. **Accessibility**
+   - Uses the [`viridis`](https://cran.r-project.org/web/packages/viridis/index.html) palette for color-blind friendly and perceptually uniform colors.
+   - Clear hover labels and large font sizes for readability.
+
+3. **User Controls**
+   - **Select Countries**: Choose which countries to display.
+   - **Top N Countries**: Show only the top N countries per year.
+   - **Animation Speed**: Slow, Normal, Fast options.
+   - **Play/Pause/Step Controls**: Navigate through years manually or play continuously.
+
+4. **Smooth Interpolation**
+   - Fertility values are interpolated annually to ensure a continuous animation.
+   - Missing or incomplete data is safely handled to prevent errors.
+
+5. **Efficient Rendering**
+   - Optimized to minimize system resource usage.
+   - Only top N countries are displayed per frame.
+   - Uses `group_modify()` for efficient data processing.
+
+---
+
+## Data
+- The fertility rate data is **illustrative**, inspired by World Bank and World Development Indicators.
+- Values represent **total fertility rate (births per woman)**.
+- Countries included:
+  - 🌍 World Average
+  - 🇺🇸 United States
+  - 🇷🇺 Russia
+  - 🇵🇰 Pakistan
+  - 🇳🇬 Nigeria
+  - 🇮🇳 India
+  - 🇮🇩 Indonesia
+  - 🇪🇹 Ethiopia
+  - 🇨🇳 China
+  - 🇧🇷 Brazil
+  - 🇧🇩 Bangladesh
+
+---
+
+## Dependencies
+The app requires the following R packages:
+- `shiny` – for the interactive web application
+- `tidyverse` – for data manipulation
+- `plotly` – for interactive and animated plots
+- `viridis` – for color-blind friendly palettes
+
+Install them using:
+
+```r
+install.packages(c("shiny", "tidyverse", "plotly", "viridis"))
