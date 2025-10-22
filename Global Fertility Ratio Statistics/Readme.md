@@ -1,5 +1,7 @@
 # 🌍 Global Fertility Rate Animated Bar Chart Race
 
+# RESULT IS HOSTED AT:- https://babafreevisuals.shinyapps.io/TEXT/
+
 ## Overview
 This Shiny application visualizes **fertility rate trends across countries** from **1960 to 2023** using a dynamic, movie-like animated bar chart. The app emphasizes **accessibility** with color-blind friendly palettes and allows users to interactively explore fertility rate changes over time.
 
